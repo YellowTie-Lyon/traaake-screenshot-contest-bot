@@ -152,19 +152,12 @@ export async function closeContest(guild, guildConfig, contest, client) {
     const endLabel   = new Date(contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
     await channel.send(
-      `🏆 **Résultat du concours !**\n` +
-      `📅 **Du** ${startLabel} **au** ${endLabel}`
+      `🏆 **Le gagnant du concours screenshot de la semaine du ${startLabel} au ${endLabel} est <@${winner.participants.discord_user_id}> avec ${winner.vote_count} ❤️ !**`
     );
 
     const embed = new EmbedBuilder()
-      .setTitle('🏆 Résultat du concours !')
-      .setDescription(
-        `🥇 **Le gagnant est ${winner.participants.discord_display_name}** avec **${winner.vote_count} ❤️** !\n` +
-        (participations[1] ? `🥈 <@${participations[1].participants.discord_user_id}> — ${participations[1].vote_count} ❤️\n` : '') +
-        (participations[2] ? `🥉 <@${participations[2].participants.discord_user_id}> — ${participations[2].vote_count} ❤️` : '')
-      )
-      .setColor(0xffd700)
-      .setTimestamp();
+      .setDescription(`📸 *Photo de <@${winner.participants.discord_user_id}>*`)
+      .setColor(0xffd700);
 
     if (winner.image_url) embed.setImage(winner.image_url);
     await channel.send({ embeds: [embed] });
