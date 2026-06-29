@@ -9,7 +9,7 @@ import { log } from './logger.js';
 import { loadAllGuildConfigs, getGuildConfig, getActiveContest, refreshGuildConfig } from './config.js';
 import { handleScreenshotMessage, handleVoteReaction } from './participation.js';
 import { handleInteraction } from './commands/handlers.js';
-import { commands } from './commands/index.js';
+import { commands, registerCommands } from './commands/index.js';
 import { startScheduler, stopScheduler } from './scheduler.js';
 import { resyncVotes } from './votes-resync.js';
 
