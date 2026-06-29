@@ -24,11 +24,17 @@ export const commands = [
     .setDescription('Recharger la configuration depuis Supabase'),
 ].map(cmd => cmd.toJSON());
 
-export async function registerCommands(client) {
-  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
+export async function registerCommands(client, token) {
+  const rest = new REST({ version: '10' }).setToken(token);
   try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log('Slash commands registered globally.');
+    // Register on each guild directly (instant, no propagation delay)
+    for (const guild of client.guilds.cache.values()) {
+      await rest.put(
+        Routes.applicationGuildCommands(client.user.id, guild.id),
+        { body: commands }
+      );
+      console.log(`Slash commands registered on guild ${guild.name}.`);
+    }
   } catch (err) {
     console.error('Failed to register slash commands:', err.message);
   }

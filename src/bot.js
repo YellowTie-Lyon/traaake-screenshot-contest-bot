@@ -3,8 +3,6 @@ import {
   GatewayIntentBits,
   Partials,
   Events,
-  REST,
-  Routes,
 } from 'discord.js';
 import { supabase } from './supabase.js';
 import { log } from './logger.js';
@@ -43,10 +41,8 @@ export async function connectBot(env) {
   client.once(Events.ClientReady, async () => {
     console.log(`[BOT] Logged in as ${client.user.tag} (env: ${env.name})`);
 
-    // Register slash commands on this specific Discord application
-    const rest = new REST({ version: '10' }).setToken(env.discord_bot_token);
-    await rest.put(Routes.applicationCommands(env.discord_app_id), { body: commands })
-      .catch(err => console.error('[BOT] Failed to register slash commands:', err.message));
+    // Register slash commands on each guild (instant, no 1h propagation delay)
+    await registerCommands(client, env.discord_bot_token);
 
     await loadAllGuildConfigs();
 
