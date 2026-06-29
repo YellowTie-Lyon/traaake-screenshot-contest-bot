@@ -91,6 +91,7 @@ export async function connectBot(env) {
   });
 
   client.on(Events.MessageReactionAdd, async (reaction, user) => {
+    console.log(`[REACTION] Add: ${reaction.emoji.name} by ${user.tag} on ${reaction.message.id}`);
     if (user.bot) return;
     const r = await resolveReaction(reaction);
     if (!r) return;
