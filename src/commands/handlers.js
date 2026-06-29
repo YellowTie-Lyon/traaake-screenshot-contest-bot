@@ -102,8 +102,7 @@ async function handleLeaderboard(interaction, guildConfig) {
   const { data: season } = await supabase
     .from('seasons')
     .select('*')
-    .eq('environment_id', guildConfig.environment_id)
-    .eq('status', 'active')
+    .eq('is_active', true)
     .single();
 
   if (!season) {

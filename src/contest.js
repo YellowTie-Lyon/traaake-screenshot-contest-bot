@@ -12,9 +12,9 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
   const environmentId = guildConfig.environment_id;
 
   // Get or create active season
-  let season = await getActiveSeason(environmentId);
+  let season = await getActiveSeason();
   if (!season) {
-    season = await createSeason(environmentId);
+    season = await createSeason();
   }
 
   // Create contest record
@@ -123,24 +123,22 @@ export async function closeContest(guild, guildConfig, contest, client) {
   });
 }
 
-async function getActiveSeason(environmentId) {
+async function getActiveSeason() {
   const { data } = await supabase
     .from('seasons')
     .select('*')
-    .eq('environment_id', environmentId)
-    .eq('status', 'active')
+    .eq('is_active', true)
     .single();
   return data ?? null;
 }
 
-async function createSeason(environmentId) {
+async function createSeason() {
   const now = new Date();
   const end = new Date(now.getFullYear(), now.getMonth() + 3, 1);
 
   const { data, error } = await supabase
     .from('seasons')
     .insert({
-      environment_id: environmentId,
       name: `Saison ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
       starts_at: now.toISOString(),
       ends_at: end.toISOString(),
