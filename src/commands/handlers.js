@@ -198,11 +198,12 @@ async function handleReset(interaction, guildConfig, isAdmin) {
 
   if (contests?.length) {
     const contestIds = contests.map(c => c.id);
-    await supabase.from('points_ledger').delete().in('contest_id', contestIds);
-    await supabase.from('participations').delete().in('contest_id', contestIds);
+    // Clear FK references first to avoid constraint violation
     await supabase.from('contests')
       .update({ winner_participation_id: null, winner_discord_user_id: null })
       .in('id', contestIds);
+    await supabase.from('points_ledger').delete().in('contest_id', contestIds);
+    await supabase.from('participations').delete().in('contest_id', contestIds);
   }
 
   // Delete participants
