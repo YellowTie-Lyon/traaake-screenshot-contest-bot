@@ -55,6 +55,7 @@ export async function connectBot(env) {
 
     await resyncVotes(client);
     startScheduler(client);
+    watchContestChanges(client, env);
 
     await log(null, 'bot_connected', { environment: env.name, guilds: client.guilds.cache.size });
   });
@@ -141,6 +142,65 @@ export async function connectBot(env) {
 
   await client.login(env.discord_bot_token);
   return client;
+}
+
+function watchContestChanges(client, env) {
+  supabase
+    .channel(`contests-${env.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'contests',
+        filter: `environment_id=eq.${env.id}`,
+      },
+      async payload => {
+        const contest = payload.new;
+        const old = payload.old;
+        if (contest.status === old.status) return;
+
+        console.log(`[BOT] Contest ${contest.id} status: ${old.status} → ${contest.status}`);
+
+        // Find the guild for this contest
+        const { data: guildConfig } = await supabase
+          .from('discord_guild_configs')
+          .select('*')
+          .eq('environment_id', env.id)
+          .single();
+
+        if (!guildConfig) return;
+
+        const guild = client.guilds.cache.get(guildConfig.guild_id);
+        if (!guild) return;
+
+        const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
+
+        if (contest.status === 'active' && old.status === 'suspended') {
+          if (channel) await channel.send('✅ **Le concours est réouvert !** Continuez à voter avec ❤️ !');
+          await log(guildConfig.guild_id, 'contest_reopened_dashboard', { contestId: contest.id });
+
+        } else if (contest.status === 'active' && !old.status) {
+          // Opened from dashboard — opening message handled by openContest()
+
+        } else if (contest.status === 'suspended') {
+          if (channel) await channel.send('⏸️ **Le concours est temporairement suspendu** par un administrateur.');
+          await log(guildConfig.guild_id, 'contest_suspended_dashboard', { contestId: contest.id });
+
+        } else if (contest.status === 'closed') {
+          // Closed from dashboard — trigger full close logic
+          const { openContest, closeContest } = await import('./contest.js');
+          const { data: contestSettings } = await supabase
+            .from('contest_settings')
+            .select('*')
+            .eq('environment_id', env.id)
+            .single();
+
+          await closeContest(guild, guildConfig, contest, client);
+        }
+      }
+    )
+    .subscribe();
 }
 
 export async function disconnectBot(client, envName) {
