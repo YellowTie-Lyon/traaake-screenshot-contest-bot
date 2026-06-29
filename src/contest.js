@@ -51,12 +51,11 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
   if (channel) {
     const startLabel = startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const endLabel   = endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-    const msLeft   = endDate.getTime() - startDate.getTime();
-    const daysLeft = TEST_MODE ? '1 minute' : `${Math.round(msLeft / 86400_000)} jours`;
+    const closeTimestamp = Math.floor(endDate.getTime() / 1000);
 
     await channel.send(
       `@everyone ! Le concours du photographe de la semaine est **OUVERT** ✅ A vous de jouer !\n` +
-      `📅 **Du** ${startLabel} **au** ${endLabel} — ferme dans **${daysLeft}**`
+      `📅 **Du** ${startLabel} **au** ${endLabel} — ferme <t:${closeTimestamp}:R>`
     );
 
     const embed = new EmbedBuilder()
