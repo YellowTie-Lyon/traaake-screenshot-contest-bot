@@ -84,7 +84,7 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
 }
 
 export async function handleVoteReaction(reaction, user, add, guildId, contest) {
-  if (reaction.emoji.name !== '👍') return;
+  if (reaction.emoji.name !== '❤️') return;
   if (user.bot) return;
 
   const messageId = reaction.message.id;
