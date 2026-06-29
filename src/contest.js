@@ -4,6 +4,8 @@ import { EmbedBuilder } from 'discord.js';
 
 const POINTS_MAP = { 1: 100, 2: 75, 3: 50 };
 const VOTE_EMOJI = '❤️';
+const TEST_MODE = process.env.CONTEST_TEST_MODE === 'true';
+const CONTEST_DURATION_MS = TEST_MODE ? 60_000 : 7 * 86400_000;
 
 export async function openContest(guild, guildConfig, contestSettings, client) {
   const environmentId = guildConfig.environment_id;
@@ -14,7 +16,7 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
   }
 
   const startDate = new Date();
-  const endDate = new Date(startDate.getTime() + (contestSettings?.duration_days ?? 7) * 86400000);
+  const endDate = new Date(startDate.getTime() + CONTEST_DURATION_MS);
 
   const { data: contest, error } = await supabase
     .from('contests')
