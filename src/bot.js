@@ -117,6 +117,28 @@ export async function connectBot(env) {
     await handleVoteReaction(r, user, false, guildId, contest);
   });
 
+  client.on(Events.MessageDelete, async message => {
+    if (!message.guildId) return;
+    const config = await getGuildConfig(message.guildId);
+    if (!config) return;
+    if (message.channelId !== config.guildConfig.contest_channel_id) return;
+
+    const { data: participation } = await supabase
+      .from('participations')
+      .select('id, participant_id, participants(discord_user_id, discord_username)')
+      .eq('message_id', message.id)
+      .single();
+
+    if (!participation) return;
+
+    await supabase.from('participations').delete().eq('id', participation.id);
+    await log(message.guildId, 'participation_deleted', {
+      messageId: message.id,
+      participantId: participation.participant_id,
+    });
+    console.log(`[BOT] Participation deleted for message ${message.id}`);
+  });
+
   client.on(Events.InteractionCreate, interaction => handleInteraction(interaction, client));
   client.on(Events.Error, err => console.error('[BOT] Discord error:', err.message));
 
