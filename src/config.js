@@ -15,6 +15,7 @@ export async function refreshGuildConfig(guildId) {
     .from('discord_guild_configs')
     .select('*, environments(*)')
     .eq('guild_id', guildId)
+    .eq('environment_id', process.env.ENVIRONMENT_ID)
     .single();
 
   if (error || !guildConfig) {
