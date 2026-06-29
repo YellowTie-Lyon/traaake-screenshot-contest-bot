@@ -136,13 +136,26 @@ export async function closeContest(guild, guildConfig, contest, client) {
   // Announce winner
   if (channel) {
     const winner = participations[0];
-    const startLabel = new Date(contest.started_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const endLabel   = new Date(contest.ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const startLabel = new Date(contest.started_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const endLabel   = new Date(contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
     await channel.send(
-      `🏆 Le gagnant du concours screens est ➡️ <@${winner.participants.discord_user_id}> 🏆\n` +
-      `📅 **Date de début :** ${startLabel} / **Date de fin :** ${endLabel}`
+      `🏆 **Résultat du concours !**\n` +
+      `📅 **Du** ${startLabel} **au** ${endLabel}`
     );
+
+    const embed = new EmbedBuilder()
+      .setTitle('🏆 Résultat du concours !')
+      .setDescription(
+        `🥇 **Le gagnant est ${winner.participants.discord_display_name}** avec **${winner.vote_count} ❤️** !\n` +
+        (participations[1] ? `🥈 <@${participations[1].participants.discord_user_id}> — ${participations[1].vote_count} ❤️\n` : '') +
+        (participations[2] ? `🥉 <@${participations[2].participants.discord_user_id}> — ${participations[2].vote_count} ❤️` : '')
+      )
+      .setColor(0xffd700)
+      .setTimestamp();
+
+    if (winner.image_url) embed.setImage(winner.image_url);
+    await channel.send({ embeds: [embed] });
   }
 
   await log(guild.id, 'contest_closed', {
