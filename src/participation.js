@@ -27,13 +27,12 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
     .upsert(
       {
         discord_user_id: discordUserId,
-        environment_id: guildConfig.environment_id,
-        username: message.author.username,
-        display_name: message.member?.displayName ?? message.author.username,
+        discord_username: message.author.username,
+        discord_display_name: message.member?.displayName ?? message.author.username,
         avatar_url: message.author.displayAvatarURL({ extension: 'png', size: 256 }),
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'discord_user_id,environment_id', ignoreDuplicates: false }
+      { onConflict: 'discord_user_id', ignoreDuplicates: false }
     )
     .select()
     .single();

@@ -71,7 +71,7 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
 
     const { data: entries } = await supabase
       .from('participations')
-      .select('id, vote_count, participants(username)')
+      .select('id, vote_count, participants(discord_username)')
       .eq('contest_id', activeContest.id)
       .order('vote_count', { ascending: false })
       .limit(5);
@@ -88,7 +88,7 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
     if (entries?.length > 0) {
       embed.addFields({
         name: 'Top 5',
-        value: entries.map((e, i) => `${i + 1}. **${e.participants.username}** — ${e.vote_count} vote(s)`).join('\n'),
+        value: entries.map((e, i) => `${i + 1}. **${e.participants.discord_username}** — ${e.vote_count} vote(s)`).join('\n'),
       });
     }
 
@@ -112,7 +112,7 @@ async function handleLeaderboard(interaction, guildConfig) {
 
   const { data: ledger } = await supabase
     .from('points_ledger')
-    .select('points, participants(username, discord_user_id)')
+    .select('points, participants(discord_username, discord_user_id)')
     .eq('season_id', season.id);
 
   if (!ledger || ledger.length === 0) {
@@ -125,7 +125,7 @@ async function handleLeaderboard(interaction, guildConfig) {
   for (const entry of ledger) {
     const key = entry.participants.discord_user_id;
     totals.set(key, {
-      username: entry.participants.username,
+      username: entry.participants.discord_username,
       points: (totals.get(key)?.points ?? 0) + entry.points,
     });
   }
