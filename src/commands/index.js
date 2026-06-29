@@ -13,6 +13,9 @@ export const commands = [
     )
     .addSubcommand(sub =>
       sub.setName('status').setDescription('Voir le statut du concours actuel')
+    )
+    .addSubcommand(sub =>
+      sub.setName('check').setDescription('Forcer la vérification des votes maintenant (admin)')
     ),
 
   new SlashCommandBuilder()

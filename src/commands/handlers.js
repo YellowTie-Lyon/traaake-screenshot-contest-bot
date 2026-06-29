@@ -3,6 +3,7 @@ import { getGuildConfig, getActiveContest, invalidateCache } from '../config.js'
 import { openContest, closeContest } from '../contest.js';
 import { log } from '../logger.js';
 import { supabase } from '../supabase.js';
+import { checkContests } from '../scheduler.js';
 
 export async function handleInteraction(interaction, client) {
   if (!interaction.isChatInputCommand()) return;
@@ -65,6 +66,11 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
     await interaction.deferReply({ ephemeral: true });
     await closeContest(guild, guildConfig, activeContest, client);
     await interaction.editReply('✅ Concours fermé et gagnants annoncés !');
+
+  } else if (sub === 'check') {
+    await interaction.deferReply({ ephemeral: true });
+    await checkContests(client);
+    await interaction.editReply('✅ Vérification des votes effectuée.');
 
   } else if (sub === 'status') {
     if (!activeContest) {

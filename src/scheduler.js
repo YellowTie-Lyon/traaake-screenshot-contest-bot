@@ -39,7 +39,7 @@ export function stopScheduler() {
   console.log('[SCHEDULER] Stopped.');
 }
 
-async function checkContests(client) {
+export async function checkContests(client) {
   console.log(`[SCHEDULER] checkContests — guilds: ${client.guilds.cache.size}`);
   for (const guild of client.guilds.cache.values()) {
     try {
