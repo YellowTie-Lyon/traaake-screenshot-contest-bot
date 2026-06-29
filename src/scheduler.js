@@ -78,9 +78,7 @@ export async function checkContests(client) {
         await log(guild.id, 'contest_warning_sent', { contestId: contest.id });
       }
 
-      if (timeLeft > 0) continue;
-
-      // Time to close
+      // If tiebreak contest: check if tie is resolved even before end date
       if (contest.status === 'tiebreak') {
         const { data: top2 } = await supabase
           .from('participations')
@@ -89,12 +87,22 @@ export async function checkContests(client) {
           .order('vote_count', { ascending: false })
           .limit(2);
 
-        if (top2?.length >= 2 && top2[0].vote_count === top2[1].vote_count) {
+        const stillTied = top2?.length >= 2 && top2[0].vote_count === top2[1].vote_count;
+
+        if (timeLeft > 0 && stillTied) continue; // still tied, wait
+
+        if (timeLeft > 0 && !stillTied) {
+          // Tie resolved early → close now
+        } else if (timeLeft <= 0 && stillTied) {
+          // Time up and still tied → extend
           const newEnd = new Date(Date.now() + (TEST_MODE ? 30_000 : 24 * 3600_000));
           await supabase.from('contests').update({ ends_at: newEnd.toISOString() }).eq('id', contest.id);
           await log(guild.id, 'contest_tiebreak_extended', { contestId: contest.id });
           continue;
         }
+        // else: time up and tie resolved → fall through to close
+      } else if (timeLeft > 0) {
+        continue;
       }
 
       const result = await closeContest(guild, guildConfig, contest, client);
