@@ -36,15 +36,29 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
 
   const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
   if (channel) {
-    const announcementText = contestSettings?.announcement_message
-      ?? `🏆 **[TEST] Le concours screenshot de la semaine est ouvert !**\nPostez votre plus belle capture dans ce salon. Votez avec ❤️ pour votre favori !\nLe concours se termine <t:${Math.floor(endDate.getTime() / 1000)}:R>.`;
+    const startLabel = startDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const endLabel   = endDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    await channel.send(
+      `@everyone ! Le concours du photographe de la semaine est **OUVERT** ✅ A vous de jouer !\n` +
+      `📅 **Date de début :** ${startLabel} / **Date de fin :** ${endLabel}`
+    );
 
     const embed = new EmbedBuilder()
-      .setTitle('📸 Concours Screenshot')
-      .setDescription(announcementText)
-      .setColor(0x5865f2)
-      .setFooter({ text: `Concours #${contest.id}` })
-      .setTimestamp();
+      .setTitle('CONCOURS SCREENSHOTS')
+      .setDescription(
+        `**Comment participer ?**\n` +
+        `Chaque semaine, tentez de remporter le titre de **PHOTOGRAPHE DE LA SEMAINE** en postant votre meilleur screenshot sur Microsoft Flight Simulator 2020 & 2024 ✈️\n` +
+        `Le screenshot avec le plus de ❤️ remporte le concours et son propriétaire obtient le rôle **PHOTOGRAPHE DE LA SEMAINE** 🎉\n\n` +
+        `**Règles du concours :**\n` +
+        `🔷 Les screenshots doivent provenir **uniquement** de Microsoft Flight Simulator 2020 & 2024 !\n` +
+        `🔷 Un **seul** screenshot, **supprimez l'ancien** pour en poster un nouveau\n` +
+        `🔷 Les screenshots doivent **vous appartenir**, sous peine de sanctions\n` +
+        `🔷 Les **streamers/youtubers** ne peuvent pas participer au concours\n` +
+        `🔷 Les screenshots jugés troll, offensant ou inapproprié par les modérateurs seront supprimés.\n` +
+        `🔷 Le concours screenshots est relancé chaque mercredi soir`
+      )
+      .setColor(0x2b2d31);
 
     await channel.send({ embeds: [embed] });
   }
@@ -120,18 +134,13 @@ export async function closeContest(guild, guildConfig, contest, client) {
   // Announce winner
   if (channel) {
     const winner = participations[0];
-    const embed = new EmbedBuilder()
-      .setTitle('🏆 Résultat du concours !')
-      .setDescription(
-        `🥇 Le gagnant est **${winner.participants.discord_display_name}** avec **${winner.vote_count} ❤️** !\n\n` +
-        (participations[1] ? `🥈 <@${participations[1].participants.discord_user_id}> — ${participations[1].vote_count} ❤️\n` : '') +
-        (participations[2] ? `🥉 <@${participations[2].participants.discord_user_id}> — ${participations[2].vote_count} ❤️` : '')
-      )
-      .setColor(0xffd700)
-      .setTimestamp();
+    const startLabel = new Date(contest.started_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const endLabel   = new Date(contest.ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    if (winner.image_url) embed.setImage(winner.image_url);
-    await channel.send({ embeds: [embed] });
+    await channel.send(
+      `🏆 Le gagnant du concours screens est ➡️ <@${winner.participants.discord_user_id}> 🏆\n` +
+      `📅 **Date de début :** ${startLabel} / **Date de fin :** ${endLabel}`
+    );
   }
 
   await log(guild.id, 'contest_closed', {
