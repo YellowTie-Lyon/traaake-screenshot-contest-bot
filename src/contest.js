@@ -4,8 +4,8 @@ import { EmbedBuilder } from 'discord.js';
 
 const POINTS_MAP = { 1: 100, 2: 75, 3: 50 };
 const VOTE_EMOJI = '❤️';
-const TEST_MODE = process.env.CONTEST_TEST_MODE === 'true';
-const CONTEST_DURATION_MS = TEST_MODE ? 60_000 : 7 * 86400_000;
+export const TEST_MODE = process.env.CONTEST_TEST_MODE === 'true';
+const CONTEST_DURATION_MS  = TEST_MODE ? 60_000 : 7 * 86400_000;
 
 export async function openContest(guild, guildConfig, contestSettings, client) {
   const environmentId = guildConfig.environment_id;
@@ -38,12 +38,13 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
 
   const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
   if (channel) {
-    const startLabel = startDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const endLabel   = endDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const startLabel = startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const endLabel   = endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const daysLeft   = TEST_MODE ? '1 minute' : '7 jours';
 
     await channel.send(
       `@everyone ! Le concours du photographe de la semaine est **OUVERT** ✅ A vous de jouer !\n` +
-      `📅 **Date de début :** ${startLabel} / **Date de fin :** ${endLabel}`
+      `📅 **Du** ${startLabel} **au** ${endLabel} — ferme dans **${daysLeft}**`
     );
 
     const embed = new EmbedBuilder()

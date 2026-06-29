@@ -6,11 +6,10 @@ import { openContest, closeContest } from './contest.js';
 
 const tasks = [];
 
-// TEST_MODE: contest lasts 60s, warning at 30s, reopens 30s after close
-const TEST_MODE = process.env.CONTEST_TEST_MODE === 'true';
-const CONTEST_DURATION_MS = TEST_MODE ? 60_000 : 7 * 86400_000;
-const WARNING_BEFORE_MS   = TEST_MODE ? 30_000 : 24 * 3600_000;
-const REOPEN_DELAY_MS     = TEST_MODE ? 30_000 : 0; // 0 = next Wednesday via cron
+export const TEST_MODE       = process.env.CONTEST_TEST_MODE === 'true';
+const CONTEST_DURATION_MS    = TEST_MODE ? 60_000 : 7 * 86400_000;
+const WARNING_BEFORE_MS      = TEST_MODE ? 30_000 : 24 * 3600_000;
+const REOPEN_DELAY_MS        = TEST_MODE ? 30_000 : 0; // 0 = next Wednesday via cron
 
 export function startScheduler(client) {
   if (TEST_MODE) {
