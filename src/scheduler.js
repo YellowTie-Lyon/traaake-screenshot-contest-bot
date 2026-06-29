@@ -14,13 +14,14 @@ const REOPEN_DELAY_MS        = TEST_MODE ? 30_000 : 0; // 0 = next Wednesday via
 export function startScheduler(client) {
   if (TEST_MODE) {
     console.log('[SCHEDULER] ⚠️  TEST MODE: 60s contest, 30s warning, 30s reopen delay');
-    // Check every 5 seconds in test mode
     tasks.push(setInterval(() => checkContests(client), 5_000));
   } else {
-    // Production: check every 15 min
+    // Check every 15 min for contest expiry
     tasks.push(cron.schedule('*/15 * * * *', () => checkContests(client)));
     // Auto-open every Wednesday at 18:00
     tasks.push(cron.schedule('0 18 * * 3', () => autoOpenContests(client)));
+    // Warning reminder every Tuesday at 19:00
+    tasks.push(cron.schedule('0 19 * * 2', () => sendWarning(client)));
   }
 
   // Sync every 5 min regardless of mode
@@ -66,16 +67,11 @@ async function checkContests(client) {
       const endDate = new Date(contest.ends_at).getTime();
       const timeLeft = endDate - now;
 
-      // Send warning when WARNING_BEFORE_MS remains
-      if (
-        timeLeft > 0 &&
-        timeLeft <= WARNING_BEFORE_MS &&
-        !contest.warning_sent
-      ) {
+      // TEST MODE warning at 30s remaining
+      if (TEST_MODE && timeLeft > 0 && timeLeft <= WARNING_BEFORE_MS && !contest.warning_sent) {
         if (channel) {
-          const label = TEST_MODE ? '30 secondes' : '24 heures';
           await channel.send(
-            `@everyone ⏰ **Plus que ${label} pour voter !** Réagissez avec ❤️ sur votre screenshot favori avant la fin du concours !`
+            `@everyone ⏰ **Plus que 30 secondes pour voter !** Réagissez avec ❤️ sur votre screenshot favori !`
           );
         }
         await supabase.from('contests').update({ warning_sent: true }).eq('id', contest.id);
@@ -120,6 +116,35 @@ async function checkContests(client) {
 
     } catch (err) {
       await log(guild.id, 'scheduler_error', { error: err.message }, 'error');
+    }
+  }
+}
+
+async function sendWarning(client) {
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const config = await getGuildConfig(guild.id);
+      if (!config) continue;
+
+      const { guildConfig } = config;
+      const active = await getActiveContest(guildConfig.environment_id);
+      if (!active) continue;
+
+      const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
+      if (!channel) continue;
+
+      const endLabel = new Date(active.ends_at).toLocaleDateString('fr-FR', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      });
+
+      await channel.send(
+        `@everyone ⏰ **Dernier jour pour voter !** Le concours se termine demain **${endLabel}**.\nRéagissez avec ❤️ sur votre screenshot favori avant la fermeture !`
+      );
+
+      await supabase.from('contests').update({ warning_sent: true }).eq('id', active.id);
+      await log(guild.id, 'contest_warning_sent', { contestId: active.id });
+    } catch (err) {
+      await log(guild.id, 'warning_error', { error: err.message }, 'error');
     }
   }
 }
