@@ -35,6 +35,15 @@ export async function handleInteraction(interaction, client) {
     case 'reset':
       await handleReset(interaction, guildConfig, isAdmin);
       break;
+    case 'ban':
+      await handleBan(interaction, guildConfig, isAdmin);
+      break;
+    case 'unban':
+      await handleUnban(interaction, guildConfig, isAdmin);
+      break;
+    case 'bans':
+      await handleBans(interaction, guildConfig, isAdmin);
+      break;
   }
 }
 
@@ -217,6 +226,107 @@ async function handleReset(interaction, guildConfig, isAdmin) {
 
   await log(guildConfig.guild_id, 'leaderboard_reset', { triggeredBy: interaction.user.id });
   await interaction.editReply('✅ Classement remis à zéro — points, participations, membres, votes et gagnants supprimés.');
+}
+
+function parseDuration(str) {
+  if (!str) return null;
+  const match = str.match(/^(\d+)(j|d|h)$/i);
+  if (!match) return null;
+  const amount = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+  const ms = unit === 'h' ? amount * 3600000 : amount * 86400000;
+  return new Date(Date.now() + ms);
+}
+
+async function handleBan(interaction, guildConfig, isAdmin) {
+  if (!isAdmin) {
+    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    return;
+  }
+
+  const target = interaction.options.getUser('membre');
+  const reason = interaction.options.getString('raison') ?? null;
+  const dureeStr = interaction.options.getString('durée') ?? null;
+  const expiresAt = parseDuration(dureeStr);
+
+  await supabase.from('contest_bans').upsert(
+    {
+      environment_id: guildConfig.environment_id,
+      discord_user_id: target.id,
+      discord_username: target.username,
+      reason,
+      banned_by: interaction.user.id,
+      banned_at: new Date().toISOString(),
+      expires_at: expiresAt?.toISOString() ?? null,
+    },
+    { onConflict: 'environment_id,discord_user_id' }
+  );
+
+  const expiry = expiresAt
+    ? `jusqu'au <t:${Math.floor(expiresAt.getTime() / 1000)}:F>`
+    : 'définitivement';
+
+  await interaction.reply({
+    content: `🚫 **${target.username}** est exclu du concours ${expiry}${reason ? ` — *${reason}*` : ''}.`,
+    ephemeral: true,
+  });
+  await log(guildConfig.guild_id, 'contest_ban', { targetId: target.id, reason, expiresAt, bannedBy: interaction.user.id });
+}
+
+async function handleUnban(interaction, guildConfig, isAdmin) {
+  if (!isAdmin) {
+    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    return;
+  }
+
+  const target = interaction.options.getUser('membre');
+
+  const { error } = await supabase
+    .from('contest_bans')
+    .delete()
+    .eq('environment_id', guildConfig.environment_id)
+    .eq('discord_user_id', target.id);
+
+  if (error) {
+    await interaction.reply({ content: `❌ Erreur : ${error.message}`, ephemeral: true });
+    return;
+  }
+
+  await interaction.reply({ content: `✅ **${target.username}** peut à nouveau participer au concours.`, ephemeral: true });
+  await log(guildConfig.guild_id, 'contest_unban', { targetId: target.id, unbannedBy: interaction.user.id });
+}
+
+async function handleBans(interaction, guildConfig, isAdmin) {
+  if (!isAdmin) {
+    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const { data: bans } = await supabase
+    .from('contest_bans')
+    .select('discord_username, reason, banned_at, expires_at')
+    .eq('environment_id', guildConfig.environment_id)
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .order('banned_at', { ascending: false });
+
+  if (!bans?.length) {
+    await interaction.reply({ content: 'Aucun membre exclu en ce moment.', ephemeral: true });
+    return;
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle('🚫 Membres exclus du concours')
+    .setColor(0xff4444)
+    .setDescription(
+      bans.map(b => {
+        const expiry = b.expires_at ? `<t:${Math.floor(new Date(b.expires_at).getTime() / 1000)}:F>` : 'Permanent';
+        return `**${b.discord_username}** — ${expiry}${b.reason ? ` — *${b.reason}*` : ''}`;
+      }).join('\n')
+    )
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
 async function handleSyncConfig(interaction, guildId, isAdmin) {

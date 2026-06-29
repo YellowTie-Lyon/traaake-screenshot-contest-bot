@@ -53,6 +53,29 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
   const discordUserId = message.author.id;
   const guildId = message.guildId;
 
+  // Check if user is banned from contest
+  const { data: ban } = await supabase
+    .from('contest_bans')
+    .select('reason, expires_at')
+    .eq('environment_id', guildConfig.environment_id)
+    .eq('discord_user_id', discordUserId)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+    .limit(1)
+    .single();
+
+  if (ban) {
+    await message.delete().catch(() => null);
+    const expiry = ban.expires_at
+      ? `jusqu'au <t:${Math.floor(new Date(ban.expires_at).getTime() / 1000)}:F>`
+      : 'définitivement';
+    await sendDM(message.author,
+      `🚫 **Tu es exclu du concours screenshot** ${expiry}.\n` +
+      (ban.reason ? `**Raison :** ${ban.reason}` : '')
+    );
+    await log(guildId, 'banned_user_blocked', { discordUserId, reason: ban.reason });
+    return false;
+  }
+
   // Upsert participant
   const { data: participant, error: pErr } = await supabase
     .from('participants')
