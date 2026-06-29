@@ -232,17 +232,26 @@ async function updatePhotographerRole(guild, guildConfig, contest, winnerPartici
   const newWinnerUserId = winnerParticipation.participants.discord_user_id;
 
   // Find previous contest winner
+  let prevWinnerUserId = null;
   const { data: prevContest } = await supabase
     .from('contests')
-    .select('winner_participation_id, participations(participants(discord_user_id))')
+    .select('winner_participation_id')
     .eq('environment_id', guildConfig.environment_id)
     .eq('status', 'closed')
     .neq('id', contest.id)
+    .not('winner_participation_id', 'is', null)
     .order('closed_at', { ascending: false })
     .limit(1)
     .single();
 
-  const prevWinnerUserId = prevContest?.participations?.participants?.discord_user_id ?? null;
+  if (prevContest?.winner_participation_id) {
+    const { data: prevParticipation } = await supabase
+      .from('participations')
+      .select('participants(discord_user_id)')
+      .eq('id', prevContest.winner_participation_id)
+      .single();
+    prevWinnerUserId = prevParticipation?.participants?.discord_user_id ?? null;
+  }
 
   // Remove role from previous winner if different
   if (prevWinnerUserId && prevWinnerUserId !== newWinnerUserId) {
