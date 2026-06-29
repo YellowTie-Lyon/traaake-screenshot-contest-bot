@@ -40,16 +40,17 @@ export function stopScheduler() {
 }
 
 async function checkContests(client) {
+  console.log(`[SCHEDULER] checkContests — guilds: ${client.guilds.cache.size}`);
   for (const guild of client.guilds.cache.values()) {
     try {
       const config = await getGuildConfig(guild.id);
-      if (!config) continue;
+      if (!config) { console.log(`[SCHEDULER] no config for guild ${guild.id}`); continue; }
 
       const { guildConfig, contestSettings } = config;
       const environmentId = guildConfig.environment_id;
       const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
 
-      const { data: contest } = await supabase
+      const { data: contest, error: cErr } = await supabase
         .from('contests')
         .select('*')
         .eq('environment_id', environmentId)
@@ -57,6 +58,8 @@ async function checkContests(client) {
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
+
+      console.log(`[SCHEDULER] contest: ${contest?.id ?? 'none'} | error: ${cErr?.message ?? 'none'}`);
 
       if (!contest) continue;
 
