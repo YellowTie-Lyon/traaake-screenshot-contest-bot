@@ -1,15 +1,23 @@
 import cron from 'node-cron';
 import { supabase } from './supabase.js';
 import { log } from './logger.js';
-import { getGuildConfig, getActiveContest, loadAllGuildConfigs } from './config.js';
+import { getGuildConfig, getActiveContest } from './config.js';
 import { openContest, closeContest } from './contest.js';
 
-export function startScheduler(client) {
-  // Every hour: check for contests that need to open or close
-  cron.schedule('0 * * * *', () => checkContests(client));
+const tasks = [];
 
-  // Every 5 min: sync guild membership
-  cron.schedule('*/5 * * * *', () => syncGuilds(client));
+export function startScheduler(client) {
+  tasks.push(
+    cron.schedule('0 * * * *', () => checkContests(client)),
+    cron.schedule('*/5 * * * *', () => syncGuilds(client))
+  );
+  console.log('[SCHEDULER] Started.');
+}
+
+export function stopScheduler() {
+  for (const task of tasks) task.stop();
+  tasks.length = 0;
+  console.log('[SCHEDULER] Stopped.');
 }
 
 async function checkContests(client) {
@@ -21,24 +29,16 @@ async function checkContests(client) {
       const { guildConfig, contestSettings } = config;
       const environmentId = guildConfig.environment_id;
 
-      // Check if there's an active contest that should be closed
       const active = await getActiveContest(environmentId);
       if (active) {
-        const endDate = new Date(active.end_date);
-        if (endDate <= new Date()) {
+        if (new Date(active.end_date) <= new Date()) {
           await closeContest(guild, guildConfig, active, client);
         }
         continue;
       }
 
-      // Check if a contest should be opened (based on schedule in contest_settings)
-      if (!contestSettings?.is_active) continue;
+      if (!contestSettings?.is_active || !contestSettings.schedule_cron) continue;
 
-      const schedule = contestSettings.schedule_cron;
-      if (!schedule) continue;
-
-      // If we're in the cron window, open the contest
-      // We check this by seeing if there's no contest in the last duration_days
       const since = new Date(Date.now() - (contestSettings.duration_days ?? 7) * 86400000);
       const { data: recent } = await supabase
         .from('contests')
