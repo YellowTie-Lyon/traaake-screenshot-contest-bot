@@ -97,29 +97,67 @@ export async function closeContest(guild, guildConfig, contest, client) {
   }
 
   // Check for tie between top 2
-  if (
-    participations.length >= 2 &&
-    participations[0].vote_count === participations[1].vote_count &&
-    participations[0].vote_count > 0
-  ) {
-    // Extend contest by 24h for tie-breaking
-    const newEnd = new Date(Date.now() + 24 * 3600000);
-    await supabase.from('contests').update({ ends_at: newEnd.toISOString(), status: 'tiebreak' }).eq('id', contest.id);
+  const isTied = participations.length >= 2 &&
+    participations[0].vote_count === participations[1].vote_count;
 
-    if (channel) {
-      const embed = new EmbedBuilder()
-        .setTitle('⚖️ Égalité ! Le concours est prolongé.')
-        .setDescription(
-          `**${participations[0].participants.discord_display_name}** et **${participations[1].participants.discord_display_name}** sont à égalité avec **${participations[0].vote_count} ❤️**.\n\n` +
-          `Le concours est prolongé de 24h. Votez pour départager ! Le concours se termine <t:${Math.floor(newEnd.getTime() / 1000)}:R>.`
-        )
-        .setColor(0xff9900)
-        .setTimestamp();
-      await channel.send({ embeds: [embed] });
+  if (isTied) {
+    // Already in tiebreak and still tied → pick first submitted as final winner
+    if (contest.status === 'tiebreak') {
+      const { data: tiedParticipations } = await supabase
+        .from('participations')
+        .select('*, participants(*)')
+        .eq('contest_id', contest.id)
+        .eq('vote_count', participations[0].vote_count)
+        .order('submitted_at', { ascending: true });
+
+      // Replace top of sorted list with the tiebreak winner (first submitted)
+      if (tiedParticipations?.length >= 2) {
+        const winner = tiedParticipations[0];
+        const loser = tiedParticipations[1];
+        // Reorder so winner is first
+        const idx = participations.findIndex(p => p.id === winner.id);
+        if (idx > 0) {
+          participations.splice(idx, 1);
+          participations.unshift(winner);
+        }
+
+        if (channel) {
+          const embed = new EmbedBuilder()
+            .setTitle('⚖️ Égalité persistante — départage par ancienneté')
+            .setDescription(
+              `<@${winner.participants.discord_user_id}> et <@${loser.participants.discord_user_id}> sont toujours à égalité avec **${winner.vote_count} ❤️**.\n\n` +
+              `🏆 **<@${winner.participants.discord_user_id}> remporte le concours** car sa photo a été postée en premier !`
+            )
+            .setColor(0xff9900)
+            .setTimestamp();
+          await channel.send({ embeds: [embed] });
+        }
+
+        await log(guild.id, 'contest_tiebreak_resolved', { contestId: contest.id, winnerId: winner.participant_id });
+      }
+      // Fall through to normal close logic with reordered participations
+    } else {
+      // First tie detected → extend 24h
+      const newEnd = TEST_MODE
+        ? new Date(Date.now() + 60_000)
+        : new Date(Date.now() + 24 * 3600000);
+      await supabase.from('contests').update({ ends_at: newEnd.toISOString(), status: 'tiebreak' }).eq('id', contest.id);
+
+      if (channel) {
+        const embed = new EmbedBuilder()
+          .setTitle('⚖️ Égalité ! Le concours est prolongé.')
+          .setDescription(
+            `<@${participations[0].participants.discord_user_id}> et <@${participations[1].participants.discord_user_id}> sont à égalité avec **${participations[0].vote_count} ❤️**.\n\n` +
+            `Le concours est prolongé de ${TEST_MODE ? '1 minute' : '24h'}. Votez pour départager ! Le concours se termine <t:${Math.floor(newEnd.getTime() / 1000)}:R>.`
+          )
+          .setColor(0xff9900)
+          .setTimestamp();
+        await channel.send({ embeds: [embed] });
+      }
+
+      await log(guild.id, 'contest_tiebreak', { contestId: contest.id, tiedVotes: participations[0].vote_count });
+      return { tied: true };
     }
-
-    await log(guild.id, 'contest_tiebreak', { contestId: contest.id, tiedVotes: participations[0].vote_count });
-    return { tied: true };
   }
 
   // Award points to top 3
