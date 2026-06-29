@@ -22,6 +22,15 @@ export const commands = [
   new SlashCommandBuilder()
     .setName('syncconfig')
     .setDescription('Recharger la configuration depuis Supabase'),
+
+  new SlashCommandBuilder()
+    .setName('reset')
+    .setDescription('Remettre le classement à zéro (admin uniquement)')
+    .addStringOption(opt =>
+      opt.setName('confirmation')
+        .setDescription('Tapez "CONFIRMER" pour valider le reset')
+        .setRequired(true)
+    ),
 ].map(cmd => cmd.toJSON());
 
 export async function registerCommands(client, token) {

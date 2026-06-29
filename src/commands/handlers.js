@@ -31,6 +31,9 @@ export async function handleInteraction(interaction, client) {
     case 'syncconfig':
       await handleSyncConfig(interaction, guildId, isAdmin);
       break;
+    case 'reset':
+      await handleReset(interaction, guildConfig, isAdmin);
+      break;
   }
 }
 
@@ -143,6 +146,53 @@ async function handleLeaderboard(interaction, guildConfig) {
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleReset(interaction, guildConfig, isAdmin) {
+  if (!isAdmin) {
+    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    return;
+  }
+
+  const confirmation = interaction.options.getString('confirmation');
+  if (confirmation !== 'CONFIRMER') {
+    await interaction.reply({ content: '❌ Tapez exactement `CONFIRMER` pour valider le reset.', ephemeral: true });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  const environmentId = guildConfig.environment_id;
+
+  // Delete all points
+  await supabase.from('points_ledger').delete().eq(
+    'participant_id',
+    supabase.from('participants').select('id').eq('environment_id', environmentId)
+  );
+
+  // Simpler: delete points for all contests of this environment
+  const { data: contests } = await supabase
+    .from('contests')
+    .select('id')
+    .eq('environment_id', environmentId);
+
+  if (contests?.length) {
+    const contestIds = contests.map(c => c.id);
+    await supabase.from('points_ledger').delete().in('contest_id', contestIds);
+    await supabase.from('participations').delete().in('contest_id', contestIds);
+  }
+
+  // Delete participants
+  await supabase.from('participants').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+  // Close active contest if any
+  await supabase.from('contests')
+    .update({ status: 'closed', closed_at: new Date().toISOString() })
+    .eq('environment_id', environmentId)
+    .in('status', ['active', 'tiebreak']);
+
+  await log(guildConfig.guild_id, 'leaderboard_reset', { triggeredBy: interaction.user.id });
+  await interaction.editReply('✅ Classement remis à zéro — points, participations et membres supprimés.');
 }
 
 async function handleSyncConfig(interaction, guildId, isAdmin) {
