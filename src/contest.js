@@ -156,7 +156,6 @@ export async function closeContest(guild, guildConfig, contest, client) {
     );
 
     const embed = new EmbedBuilder()
-      .setDescription(`📸 *Photo de <@${winner.participants.discord_user_id}>*`)
       .setColor(0xffd700);
 
     if (winner.image_url) embed.setImage(winner.image_url);
