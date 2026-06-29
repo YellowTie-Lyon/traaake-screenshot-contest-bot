@@ -183,6 +183,9 @@ export async function closeContest(guild, guildConfig, contest, client) {
     closed_at: new Date().toISOString(),
   }).eq('id', contest.id);
 
+  // Assign/remove "Photographe de la semaine" role
+  await updatePhotographerRole(guild, guildConfig, contest, participations[0]);
+
   // Announce winner
   if (channel) {
     const winner = participations[0];
@@ -208,6 +211,56 @@ export async function closeContest(guild, guildConfig, contest, client) {
   });
 
   return { tied: false };
+}
+
+async function updatePhotographerRole(guild, guildConfig, contest, winnerParticipation) {
+  const { data: settings } = await supabase
+    .from('contest_settings')
+    .select('photographer_role_id')
+    .eq('environment_id', guildConfig.environment_id)
+    .single();
+
+  const roleId = settings?.photographer_role_id;
+  if (!roleId) return;
+
+  const role = guild.roles.cache.get(roleId);
+  if (!role) {
+    await log(guild.id, 'photographer_role_missing', { roleId }, 'error');
+    return;
+  }
+
+  const newWinnerUserId = winnerParticipation.participants.discord_user_id;
+
+  // Find previous contest winner
+  const { data: prevContest } = await supabase
+    .from('contests')
+    .select('winner_participation_id, participations(participants(discord_user_id))')
+    .eq('environment_id', guildConfig.environment_id)
+    .eq('status', 'closed')
+    .neq('id', contest.id)
+    .order('closed_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  const prevWinnerUserId = prevContest?.participations?.participants?.discord_user_id ?? null;
+
+  // Remove role from previous winner if different
+  if (prevWinnerUserId && prevWinnerUserId !== newWinnerUserId) {
+    try {
+      const prevMember = await guild.members.fetch(prevWinnerUserId);
+      await prevMember.roles.remove(roleId);
+    } catch {
+      await log(guild.id, 'photographer_role_remove_failed', { userId: prevWinnerUserId }, 'warn');
+    }
+  }
+
+  // Add role to new winner
+  try {
+    const newMember = await guild.members.fetch(newWinnerUserId);
+    await newMember.roles.add(roleId);
+  } catch {
+    await log(guild.id, 'photographer_role_add_failed', { userId: newWinnerUserId }, 'warn');
+  }
 }
 
 async function getActiveSeason() {
