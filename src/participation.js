@@ -1,22 +1,54 @@
 import { supabase } from './supabase.js';
 import { log } from './logger.js';
 
+const VOTE_EMOJI = '❤️';
+
 function hasImage(message) {
   if (message.attachments.some(a => a.contentType?.startsWith('image/'))) return true;
   if (message.embeds.some(e => e.image || e.thumbnail)) return true;
   return false;
 }
 
+function hasTextContent(message) {
+  return message.content && message.content.trim().length > 0;
+}
+
 function getImageUrl(message) {
   const attachment = message.attachments.find(a => a.contentType?.startsWith('image/'));
   if (attachment) return attachment.url;
   const embed = message.embeds.find(e => e.image || e.thumbnail);
-  if (embed) return embed.image?.url ?? embed.thumbnail?.url ?? null;
-  return null;
+  return embed?.image?.url ?? embed?.thumbnail?.url ?? null;
+}
+
+async function sendDM(user, text) {
+  try {
+    const dm = await user.createDM();
+    await dm.send(text);
+  } catch {
+    // DMs may be closed
+  }
 }
 
 export async function handleScreenshotMessage(message, guildConfig, contest) {
-  if (!hasImage(message)) return false;
+  const hasImg = hasImage(message);
+  const hasText = hasTextContent(message);
+
+  // Delete message and DM user if it's text-only or text+image
+  if (!hasImg) {
+    await message.delete().catch(() => null);
+    await sendDM(message.author,
+      `❌ **Salon concours** : seules les images sont autorisées dans ce salon. Pas de texte sans image.`
+    );
+    return false;
+  }
+
+  if (hasText) {
+    await message.delete().catch(() => null);
+    await sendDM(message.author,
+      `❌ **Salon concours** : tu ne peux pas joindre du texte avec ton image. Reposte uniquement l'image, sans texte.`
+    );
+    return false;
+  }
 
   const discordUserId = message.author.id;
   const guildId = message.guildId;
@@ -45,14 +77,18 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
   // Check if participant already submitted for this contest
   const { data: existing } = await supabase
     .from('participations')
-    .select('id')
+    .select('id, message_id')
     .eq('participant_id', participant.id)
     .eq('contest_id', contest.id)
     .single();
 
   if (existing) {
-    await message.reply('Tu as déjà soumis une participation pour ce concours. Une seule participation par concours est autorisée.');
-    await log(guildId, 'duplicate_submission', { discordUserId, contestId: contest.id }, 'warn');
+    await message.delete().catch(() => null);
+    await sendDM(message.author,
+      `❌ **Salon concours** : tu as déjà soumis une participation pour ce concours.\n\n` +
+      `Pour changer ta photo, supprime d'abord ton ancienne participation dans le salon, puis reposte ta nouvelle image.`
+    );
+    await log(guildId, 'duplicate_submission_blocked', { discordUserId, contestId: contest.id }, 'warn');
     return false;
   }
 
@@ -72,7 +108,9 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
     return false;
   }
 
-  await message.react('✅');
+  // Add ❤️ reaction as the vote emoji
+  await message.react(VOTE_EMOJI);
+
   await log(guildId, 'participation_submitted', {
     discordUserId,
     username: message.author.username,
@@ -84,7 +122,7 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
 }
 
 export async function handleVoteReaction(reaction, user, add, guildId, contest) {
-  if (reaction.emoji.name !== '❤️') return;
+  if (reaction.emoji.name !== VOTE_EMOJI) return;
   if (user.bot) return;
 
   const messageId = reaction.message.id;
@@ -98,7 +136,7 @@ export async function handleVoteReaction(reaction, user, add, guildId, contest) 
 
   if (!participation) return;
 
-  // Prevent self-voting — fetch participant's discord id
+  // Prevent self-voting
   const { data: participant } = await supabase
     .from('participants')
     .select('discord_user_id')
@@ -108,21 +146,22 @@ export async function handleVoteReaction(reaction, user, add, guildId, contest) 
   if (participant?.discord_user_id === user.id) {
     if (add) {
       await reaction.users.remove(user.id).catch(() => null);
-      const dm = await user.createDM().catch(() => null);
-      await dm?.send('Tu ne peux pas voter pour ta propre participation.').catch(() => null);
+      await sendDM(user, '❌ Tu ne peux pas voter pour ta propre participation.');
     }
     return;
   }
 
   const delta = add ? 1 : -1;
+  const newCount = Math.max(0, participation.vote_count + delta);
 
   await supabase
     .from('participations')
-    .update({ vote_count: Math.max(0, participation.vote_count + delta) })
+    .update({ vote_count: newCount })
     .eq('id', participation.id);
 
   await log(guildId, add ? 'vote_added' : 'vote_removed', {
     voterId: user.id,
     participationId: participation.id,
+    newCount,
   });
 }

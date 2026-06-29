@@ -2,22 +2,17 @@ import { supabase } from './supabase.js';
 import { log } from './logger.js';
 import { EmbedBuilder } from 'discord.js';
 
-const POINTS_MAP = {
-  1: 100,
-  2: 75,
-  3: 50,
-};
+const POINTS_MAP = { 1: 100, 2: 75, 3: 50 };
+const VOTE_EMOJI = '❤️';
 
 export async function openContest(guild, guildConfig, contestSettings, client) {
   const environmentId = guildConfig.environment_id;
 
-  // Get or create active season
   let season = await getActiveSeason();
   if (!season) {
     season = await createSeason();
   }
 
-  // Create contest record
   const startDate = new Date();
   const endDate = new Date(startDate.getTime() + (contestSettings?.duration_days ?? 7) * 86400000);
 
@@ -39,11 +34,10 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
     return null;
   }
 
-  // Announce in contest channel
   const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
   if (channel) {
     const announcementText = contestSettings?.announcement_message
-      ?? `🎉 **Nouveau concours screenshot ouvert !**\nPostez vos plus belles captures dans ce salon. Le concours se termine <t:${Math.floor(endDate.getTime() / 1000)}:R>.`;
+      ?? `🏆 **[TEST] Le concours screenshot de la semaine est ouvert !**\nPostez votre plus belle capture dans ce salon. Votez avec ❤️ pour votre favori !\nLe concours se termine <t:${Math.floor(endDate.getTime() / 1000)}:R>.`;
 
     const embed = new EmbedBuilder()
       .setTitle('📸 Concours Screenshot')
@@ -60,20 +54,47 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
 }
 
 export async function closeContest(guild, guildConfig, contest, client) {
-  // Fetch participations sorted by votes
   const { data: participations } = await supabase
     .from('participations')
     .select('*, participants(*)')
     .eq('contest_id', contest.id)
     .order('vote_count', { ascending: false });
 
+  const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
+
   if (!participations || participations.length === 0) {
-    await supabase.from('contests').update({ status: 'closed' }).eq('id', contest.id);
+    await supabase.from('contests').update({ status: 'closed', closed_at: new Date().toISOString() }).eq('id', contest.id);
     await log(guild.id, 'contest_closed_no_entries', { contestId: contest.id });
-    return;
+    return { tied: false };
   }
 
-  // Award points
+  // Check for tie between top 2
+  if (
+    participations.length >= 2 &&
+    participations[0].vote_count === participations[1].vote_count &&
+    participations[0].vote_count > 0
+  ) {
+    // Extend contest by 24h for tie-breaking
+    const newEnd = new Date(Date.now() + 24 * 3600000);
+    await supabase.from('contests').update({ ends_at: newEnd.toISOString(), status: 'tiebreak' }).eq('id', contest.id);
+
+    if (channel) {
+      const embed = new EmbedBuilder()
+        .setTitle('⚖️ Égalité ! Le concours est prolongé.')
+        .setDescription(
+          `**${participations[0].participants.discord_display_name}** et **${participations[1].participants.discord_display_name}** sont à égalité avec **${participations[0].vote_count} ❤️**.\n\n` +
+          `Le concours est prolongé de 24h. Votez pour départager ! Le concours se termine <t:${Math.floor(newEnd.getTime() / 1000)}:R>.`
+        )
+        .setColor(0xff9900)
+        .setTimestamp();
+      await channel.send({ embeds: [embed] });
+    }
+
+    await log(guild.id, 'contest_tiebreak', { contestId: contest.id, tiedVotes: participations[0].vote_count });
+    return { tied: true };
+  }
+
+  // Award points to top 3
   for (let i = 0; i < Math.min(3, participations.length); i++) {
     const participation = participations[i];
     const points = POINTS_MAP[i + 1] ?? 0;
@@ -88,39 +109,38 @@ export async function closeContest(guild, guildConfig, contest, client) {
     });
   }
 
-  // Mark contest closed with winner
+  // Mark winner (only 1st place)
   await supabase.from('contests').update({
     status: 'closed',
     winner_participation_id: participations[0].id,
+    winner_discord_user_id: participations[0].participants.discord_user_id,
     closed_at: new Date().toISOString(),
   }).eq('id', contest.id);
 
-  // Announce winners
-  const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
+  // Announce winner
   if (channel) {
+    const winner = participations[0];
     const embed = new EmbedBuilder()
-      .setTitle('🏆 Résultats du concours !')
+      .setTitle('🏆 Résultat du concours !')
+      .setDescription(
+        `🥇 Le gagnant est **${winner.participants.discord_display_name}** avec **${winner.vote_count} ❤️** !\n\n` +
+        (participations[1] ? `🥈 <@${participations[1].participants.discord_user_id}> — ${participations[1].vote_count} ❤️\n` : '') +
+        (participations[2] ? `🥉 <@${participations[2].participants.discord_user_id}> — ${participations[2].vote_count} ❤️` : '')
+      )
       .setColor(0xffd700)
       .setTimestamp();
 
-    const lines = participations.slice(0, 3).map((p, i) => {
-      const medals = ['🥇', '🥈', '🥉'];
-      return `${medals[i]} <@${p.participants.discord_user_id}> — **${p.vote_count} vote(s)**`;
-    });
-
-    embed.setDescription(lines.join('\n'));
-
-    const winner = participations[0];
     if (winner.image_url) embed.setImage(winner.image_url);
-
     await channel.send({ embeds: [embed] });
   }
 
   await log(guild.id, 'contest_closed', {
     contestId: contest.id,
-    winnerId: participations[0]?.participant_id,
+    winnerId: participations[0].participant_id,
     totalEntries: participations.length,
   });
+
+  return { tied: false };
 }
 
 async function getActiveSeason() {
