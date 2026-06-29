@@ -169,14 +169,28 @@ async function handleReset(interaction, guildConfig, isAdmin) {
   await interaction.deferReply({ ephemeral: true });
 
   const environmentId = guildConfig.environment_id;
+  const guild = interaction.guild;
 
-  // Delete all points
-  await supabase.from('points_ledger').delete().eq(
-    'participant_id',
-    supabase.from('participants').select('id').eq('environment_id', environmentId)
-  );
+  // Remove photographer role from current holder
+  const { data: roleSettings } = await supabase
+    .from('contest_settings')
+    .select('photographer_role_id')
+    .eq('environment_id', environmentId)
+    .single();
 
-  // Simpler: delete points for all contests of this environment
+  if (roleSettings?.photographer_role_id) {
+    const role = guild.roles.cache.get(roleSettings.photographer_role_id);
+    if (role) {
+      const members = await guild.members.fetch();
+      for (const member of members.values()) {
+        if (member.roles.cache.has(roleSettings.photographer_role_id)) {
+          await member.roles.remove(roleSettings.photographer_role_id).catch(() => null);
+        }
+      }
+    }
+  }
+
+  // Delete points, participations and reset winner data for all contests
   const { data: contests } = await supabase
     .from('contests')
     .select('id')
@@ -186,6 +200,9 @@ async function handleReset(interaction, guildConfig, isAdmin) {
     const contestIds = contests.map(c => c.id);
     await supabase.from('points_ledger').delete().in('contest_id', contestIds);
     await supabase.from('participations').delete().in('contest_id', contestIds);
+    await supabase.from('contests')
+      .update({ winner_participation_id: null, winner_discord_user_id: null })
+      .in('id', contestIds);
   }
 
   // Delete participants
@@ -198,7 +215,7 @@ async function handleReset(interaction, guildConfig, isAdmin) {
     .in('status', ['active', 'tiebreak']);
 
   await log(guildConfig.guild_id, 'leaderboard_reset', { triggeredBy: interaction.user.id });
-  await interaction.editReply('✅ Classement remis à zéro — points, participations et membres supprimés.');
+  await interaction.editReply('✅ Classement remis à zéro — points, participations, membres, votes et gagnants supprimés.');
 }
 
 async function handleSyncConfig(interaction, guildId, isAdmin) {
