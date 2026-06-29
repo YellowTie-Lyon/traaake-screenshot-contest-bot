@@ -5,7 +5,16 @@ import { EmbedBuilder } from 'discord.js';
 const POINTS_MAP = { 1: 100, 2: 75, 3: 50 };
 const VOTE_EMOJI = '❤️';
 export const TEST_MODE = process.env.CONTEST_TEST_MODE === 'true';
-const CONTEST_DURATION_MS  = TEST_MODE ? 60_000 : 7 * 86400_000;
+
+function nextWednesdayAt18() {
+  const now = new Date();
+  const result = new Date(now);
+  // Wednesday = 3, target hour = 18
+  const daysUntilWed = (3 - now.getDay() + 7) % 7 || 7; // at least 1 day ahead
+  result.setDate(now.getDate() + daysUntilWed);
+  result.setHours(18, 0, 0, 0);
+  return result;
+}
 
 export async function openContest(guild, guildConfig, contestSettings, client) {
   const environmentId = guildConfig.environment_id;
@@ -16,7 +25,9 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
   }
 
   const startDate = new Date();
-  const endDate = new Date(startDate.getTime() + CONTEST_DURATION_MS);
+  const endDate = TEST_MODE
+    ? new Date(startDate.getTime() + 60_000)
+    : nextWednesdayAt18();
 
   const { data: contest, error } = await supabase
     .from('contests')
