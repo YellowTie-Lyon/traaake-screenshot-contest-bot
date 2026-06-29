@@ -13,6 +13,7 @@ import { handleScreenshotMessage, handleVoteReaction } from './participation.js'
 import { handleInteraction } from './commands/handlers.js';
 import { commands } from './commands/index.js';
 import { startScheduler, stopScheduler } from './scheduler.js';
+import { resyncVotes } from './votes-resync.js';
 
 function createClient() {
   return new Client({
@@ -56,6 +57,7 @@ export async function connectBot(env) {
         .eq('guild_id', guild.id);
     }
 
+    await resyncVotes(client);
     startScheduler(client);
 
     await log(null, 'bot_connected', { environment: env.name, guilds: client.guilds.cache.size });
@@ -91,7 +93,6 @@ export async function connectBot(env) {
   });
 
   client.on(Events.MessageReactionAdd, async (reaction, user) => {
-    console.log(`[REACTION] Add: ${reaction.emoji.name} by ${user.tag} on ${reaction.message.id}`);
     if (user.bot) return;
     const r = await resolveReaction(reaction);
     if (!r) return;
