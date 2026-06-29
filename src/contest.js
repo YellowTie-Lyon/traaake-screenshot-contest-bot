@@ -221,15 +221,18 @@ async function updatePhotographerRole(guild, guildConfig, contest, winnerPartici
     .single();
 
   const roleId = settings?.photographer_role_id;
+  console.log(`[ROLE] photographer_role_id: ${roleId}`);
   if (!roleId) return;
 
   const role = guild.roles.cache.get(roleId);
+  console.log(`[ROLE] role found in cache: ${!!role}`);
   if (!role) {
     await log(guild.id, 'photographer_role_missing', { roleId }, 'error');
     return;
   }
 
   const newWinnerUserId = winnerParticipation.participants.discord_user_id;
+  console.log(`[ROLE] new winner userId: ${newWinnerUserId}`);
 
   // Find previous contest winner
   let prevWinnerUserId = null;
@@ -266,9 +269,12 @@ async function updatePhotographerRole(guild, guildConfig, contest, winnerPartici
   // Add role to new winner
   try {
     const newMember = await guild.members.fetch(newWinnerUserId);
+    console.log(`[ROLE] member fetched: ${newMember?.user?.tag}`);
     await newMember.roles.add(roleId);
-  } catch {
-    await log(guild.id, 'photographer_role_add_failed', { userId: newWinnerUserId }, 'warn');
+    console.log(`[ROLE] role added successfully`);
+  } catch (err) {
+    console.error(`[ROLE] add failed: ${err.message}`);
+    await log(guild.id, 'photographer_role_add_failed', { userId: newWinnerUserId, error: err.message }, 'warn');
   }
 }
 
