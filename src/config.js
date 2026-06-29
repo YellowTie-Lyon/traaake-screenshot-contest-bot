@@ -62,7 +62,7 @@ export async function getActiveContest(environmentId) {
     .from('contests')
     .select('*, seasons(*)')
     .eq('environment_id', environmentId)
-    .eq('status', 'active')
+    .in('status', ['active', 'tiebreak'])
     .order('created_at', { ascending: false })
     .limit(1)
     .single();
