@@ -16,6 +16,21 @@ export const commands = [
     )
     .addSubcommand(sub =>
       sub.setName('check').setDescription('Forcer la vérification des votes maintenant (admin)')
+    )
+    .addSubcommand(sub =>
+      sub.setName('ban')
+        .setDescription('Exclure un membre du concours (admin)')
+        .addUserOption(opt => opt.setName('membre').setDescription('Membre à exclure').setRequired(true))
+        .addStringOption(opt => opt.setName('raison').setDescription('Raison du ban').setRequired(false))
+        .addStringOption(opt => opt.setName('durée').setDescription('Durée ex: 7j, 30j — vide = permanent').setRequired(false))
+    )
+    .addSubcommand(sub =>
+      sub.setName('unban')
+        .setDescription('Lever l\'exclusion d\'un membre (admin)')
+        .addUserOption(opt => opt.setName('membre').setDescription('Membre à débannir').setRequired(true))
+    )
+    .addSubcommand(sub =>
+      sub.setName('bans').setDescription('Lister les membres exclus du concours (admin)')
     ),
 
   new SlashCommandBuilder()
@@ -35,29 +50,6 @@ export const commands = [
         .setRequired(true)
     ),
 
-  new SlashCommandBuilder()
-    .setName('ban')
-    .setDescription('Exclure un membre du concours (admin)')
-    .addUserOption(opt =>
-      opt.setName('membre').setDescription('Membre à exclure').setRequired(true)
-    )
-    .addStringOption(opt =>
-      opt.setName('raison').setDescription('Raison du ban').setRequired(false)
-    )
-    .addStringOption(opt =>
-      opt.setName('durée').setDescription('Durée ex: 7j, 30j — vide = permanent').setRequired(false)
-    ),
-
-  new SlashCommandBuilder()
-    .setName('unban')
-    .setDescription('Lever l\'exclusion d\'un membre (admin)')
-    .addUserOption(opt =>
-      opt.setName('membre').setDescription('Membre à débannir').setRequired(true)
-    ),
-
-  new SlashCommandBuilder()
-    .setName('bans')
-    .setDescription('Lister les membres exclus du concours (admin)'),
 ].map(cmd => cmd.toJSON());
 
 export async function registerCommands(client, token) {

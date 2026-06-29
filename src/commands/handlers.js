@@ -35,15 +35,6 @@ export async function handleInteraction(interaction, client) {
     case 'reset':
       await handleReset(interaction, guildConfig, isAdmin);
       break;
-    case 'ban':
-      await handleBan(interaction, guildConfig, isAdmin);
-      break;
-    case 'unban':
-      await handleUnban(interaction, guildConfig, isAdmin);
-      break;
-    case 'bans':
-      await handleBans(interaction, guildConfig, isAdmin);
-      break;
   }
 }
 
@@ -80,6 +71,15 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
     await interaction.deferReply({ ephemeral: true });
     await checkContests(client);
     await interaction.editReply('✅ Vérification des votes effectuée.');
+
+  } else if (sub === 'ban') {
+    await handleBan(interaction, guildConfig, isAdmin);
+
+  } else if (sub === 'unban') {
+    await handleUnban(interaction, guildConfig, isAdmin);
+
+  } else if (sub === 'bans') {
+    await handleBans(interaction, guildConfig, isAdmin);
 
   } else if (sub === 'status') {
     if (!activeContest) {
