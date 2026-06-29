@@ -31,7 +31,7 @@ async function checkContests(client) {
 
       const active = await getActiveContest(environmentId);
       if (active) {
-        if (new Date(active.end_date) <= new Date()) {
+        if (new Date(active.ends_at) <= new Date()) {
           await closeContest(guild, guildConfig, active, client);
         }
         continue;

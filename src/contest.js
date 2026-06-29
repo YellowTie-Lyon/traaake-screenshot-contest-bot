@@ -28,8 +28,8 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
       season_id: season.id,
       status: 'active',
       title: contestSettings?.contest_title ?? 'Concours Screenshot',
-      start_date: startDate.toISOString(),
-      end_date: endDate.toISOString(),
+      started_at: startDate.toISOString(),
+      ends_at: endDate.toISOString(),
     })
     .select()
     .single();

@@ -81,7 +81,7 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
       .setColor(0x5865f2)
       .addFields(
         { name: 'Statut', value: 'En cours', inline: true },
-        { name: 'Fin', value: `<t:${Math.floor(new Date(activeContest.end_date).getTime() / 1000)}:R>`, inline: true },
+        { name: 'Fin', value: `<t:${Math.floor(new Date(activeContest.ends_at).getTime() / 1000)}:R>`, inline: true },
         { name: 'Participations', value: String(entries?.length ?? 0), inline: true }
       );
 
