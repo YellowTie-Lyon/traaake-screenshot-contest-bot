@@ -137,17 +137,18 @@ async function createSeason(environmentId) {
   const now = new Date();
   const end = new Date(now.getFullYear(), now.getMonth() + 3, 1);
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('seasons')
     .insert({
       environment_id: environmentId,
       name: `Saison ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-      start_date: now.toISOString(),
-      end_date: end.toISOString(),
-      status: 'active',
+      starts_at: now.toISOString(),
+      ends_at: end.toISOString(),
+      is_active: true,
     })
     .select()
     .single();
 
+  if (error) console.error('[CONTEST] createSeason failed:', error.message);
   return data;
 }
