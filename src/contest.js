@@ -62,7 +62,7 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
         { name: '📅 Ouverture', value: startLabel, inline: true },
         { name: '🏁 Fermeture', value: endLabel, inline: true },
         { name: '⏳ Temps restant', value: `<t:${closeTimestamp}:R>`, inline: true },
-        { name: '🏆 Classement saison', value: '[Voir le classement sur trakr.fr](https://trakr.fr)', inline: false },
+        { name: '🏆 Classement', value: '[Voir le classement sur trakr.fr](https://trakr.fr)', inline: false },
       )
       .setFooter({ text: 'Relancé chaque mercredi à 18h00 • Communauté TraaaKe' });
 
@@ -234,9 +234,9 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setColor(0xffd700)
       .addFields(
         { name: '📅 Semaine du', value: `${startLabel} au ${endLabel}`, inline: true },
-        { name: '🏆 Classement saison', value: '[Voir sur trakr.fr](https://trakr.fr)', inline: true },
+        { name: '🏆 Classement', value: '[Voir sur trakr.fr](https://trakr.fr)', inline: true },
       )
-      .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name} • Communauté TraaaKe` })
+      .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name}` })
       .setTimestamp();
 
     // Supprimer le message texte d'ouverture (le @everyone "ouvert")
