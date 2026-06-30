@@ -1,10 +1,11 @@
-import { REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { log } from '../logger.js';
 
 export const commands = [
   new SlashCommandBuilder()
     .setName('contest')
     .setDescription('Gérer le concours screenshot')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addSubcommand(sub =>
       sub.setName('open').setDescription('Ouvrir un nouveau concours')
     )
@@ -40,11 +41,13 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName('syncconfig')
-    .setDescription('Recharger la configuration depuis Supabase'),
+    .setDescription('Recharger la configuration depuis Supabase')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
   new SlashCommandBuilder()
     .setName('reset')
     .setDescription('Remettre le classement à zéro (admin uniquement)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(opt =>
       opt.setName('confirmation')
         .setDescription('Tapez "CONFIRMER" pour valider le reset')
@@ -53,7 +56,8 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName('purge')
-    .setDescription('[TEMP] Supprimer tous les messages du salon concours (admin uniquement)'),
+    .setDescription('[TEMP] Supprimer tous les messages du salon concours (admin uniquement)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
   new SlashCommandBuilder()
     .setName('monstats')
@@ -63,6 +67,7 @@ export const commands = [
   new SlashCommandBuilder()
     .setName('points')
     .setDescription('Gérer les points d\'un membre (admin)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addSubcommand(sub =>
       sub.setName('ajouter')
         .setDescription('Ajouter des points à un membre')
