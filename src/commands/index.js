@@ -23,7 +23,16 @@ export const commands = [
         .setDescription('Exclure un membre du concours (admin)')
         .addUserOption(opt => opt.setName('membre').setDescription('Membre à exclure').setRequired(true))
         .addStringOption(opt => opt.setName('raison').setDescription('Raison du ban').setRequired(false))
-        .addStringOption(opt => opt.setName('durée').setDescription('Durée ex: 7j, 30j — vide = permanent').setRequired(false))
+        .addStringOption(opt => opt.setName('durée').setDescription('Durée du ban (vide = permanent)').setRequired(false)
+          .addChoices(
+            { name: '1 jour', value: '1j' },
+            { name: '3 jours', value: '3j' },
+            { name: '7 jours', value: '7j' },
+            { name: '14 jours', value: '14j' },
+            { name: '30 jours', value: '30j' },
+            { name: 'Permanent', value: 'permanent' },
+          )
+        )
     )
     .addSubcommand(sub =>
       sub.setName('unban')

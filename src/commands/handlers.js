@@ -275,7 +275,7 @@ async function handleReset(interaction, guildConfig, isAdmin) {
 }
 
 function parseDuration(str) {
-  if (!str) return null;
+  if (!str || str === 'permanent') return null;
   const match = str.match(/^(\d+)(j|d|h)$/i);
   if (!match) return null;
   const amount = parseInt(match[1]);
