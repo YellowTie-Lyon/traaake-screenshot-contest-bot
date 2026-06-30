@@ -35,6 +35,9 @@ export async function handleInteraction(interaction, client) {
     case 'reset':
       await handleReset(interaction, guildConfig, isAdmin);
       break;
+    case 'purge':
+      await handlePurge(interaction, guildConfig, isAdmin);
+      break;
   }
 }
 
@@ -343,4 +346,42 @@ async function handleSyncConfig(interaction, guildId, isAdmin) {
   invalidateCache(guildId);
   await interaction.reply({ content: '✅ Configuration rechargée depuis Supabase.', ephemeral: true });
   await log(guildId, 'config_synced_manually', { triggeredBy: interaction.user.id });
+}
+
+async function handlePurge(interaction, guildConfig, isAdmin) {
+  if (!isAdmin) {
+    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    return;
+  }
+
+  const channel = interaction.guild.channels.cache.get(guildConfig.contest_channel_id);
+  if (!channel) {
+    await interaction.reply({ content: '❌ Salon concours introuvable.', ephemeral: true });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  let deleted = 0;
+  let fetched;
+  do {
+    fetched = await channel.messages.fetch({ limit: 100 });
+    if (fetched.size === 0) break;
+    // Bulk delete messages < 14 days old
+    const recent = fetched.filter(m => Date.now() - m.createdTimestamp < 14 * 24 * 3600 * 1000);
+    if (recent.size > 1) {
+      await channel.bulkDelete(recent, true).catch(() => null);
+    } else if (recent.size === 1) {
+      await recent.first().delete().catch(() => null);
+    }
+    // Delete older messages one by one
+    const old = fetched.filter(m => Date.now() - m.createdTimestamp >= 14 * 24 * 3600 * 1000);
+    for (const msg of old.values()) {
+      await msg.delete().catch(() => null);
+    }
+    deleted += fetched.size;
+  } while (fetched.size === 100);
+
+  await interaction.editReply(`✅ ${deleted} message(s) supprimé(s) du salon concours.`);
+  await log(interaction.guildId, 'channel_purged', { triggeredBy: interaction.user.id, count: deleted });
 }

@@ -184,7 +184,8 @@ export async function closeContest(guild, guildConfig, contest, client) {
           )
           .setColor(0xff9900)
           .setTimestamp();
-        await channel.send({ embeds: [embed] });
+        const tieMsg = await channel.send({ embeds: [embed] });
+        await supabase.from('contests').update({ tiebreak_message_id: tieMsg.id }).eq('id', contest.id);
       }
 
       await log(guild.id, 'contest_tiebreak', { contestId: contest.id, tiedVotes: participations[0].vote_count });
@@ -239,9 +240,12 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name}` })
       .setTimestamp();
 
-    // Supprimer le message texte d'ouverture (le @everyone "ouvert")
+    // Supprimer le message texte d'ouverture et le message d'égalité s'il existe
     if (contest.opening_message_id) {
       await channel.messages.delete(contest.opening_message_id).catch(() => null);
+    }
+    if (contest.tiebreak_message_id) {
+      await channel.messages.delete(contest.tiebreak_message_id).catch(() => null);
     }
 
     // Transformer l'embed d'annonce/règles en annonce du gagnant (avec mention @everyone)

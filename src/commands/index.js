@@ -50,6 +50,10 @@ export const commands = [
         .setRequired(true)
     ),
 
+  new SlashCommandBuilder()
+    .setName('purge')
+    .setDescription('[TEMP] Supprimer tous les messages du salon concours (admin uniquement)'),
+
 ].map(cmd => cmd.toJSON());
 
 export async function registerCommands(client, token) {
