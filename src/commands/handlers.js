@@ -91,7 +91,8 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
       return;
     }
     await interaction.deferReply({ ephemeral: true });
-    const contest = await openContest(guild, guildConfig, contestSettings, client);
+    const theme = (interaction.options.getString('thème') ?? '').slice(0, 100) || null;
+    const contest = await openContest(guild, guildConfig, contestSettings, client, theme);
     await interaction.editReply(contest ? '✅ Concours ouvert !' : '❌ Erreur lors de l\'ouverture.');
 
   } else if (sub === 'close') {

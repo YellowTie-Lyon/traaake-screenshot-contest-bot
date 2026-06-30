@@ -15,7 +15,7 @@ function nextWednesdayAt18() {
   return result;
 }
 
-export async function openContest(guild, guildConfig, contestSettings, client) {
+export async function openContest(guild, guildConfig, contestSettings, client, theme = null) {
   const environmentId = guildConfig.environment_id;
 
   let season = await getActiveSeason();
@@ -33,6 +33,7 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
       season_id: season.id,
       status: 'active',
       title: contestSettings?.contest_title ?? 'Concours Screenshot',
+      theme: theme,
       started_at: startDate.toISOString(),
       ends_at: endDate.toISOString(),
     })
@@ -60,6 +61,7 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
       )
       .setColor(0x5865f2)
       .addFields(
+        ...(theme ? [{ name: '🎨 Thème', value: theme, inline: false }] : []),
         { name: '📅 Ouverture', value: startLabel, inline: true },
         { name: '🏁 Fermeture', value: endLabel, inline: true },
         { name: '⏳ Temps restant', value: `<t:${closeTimestamp}:R>`, inline: true },

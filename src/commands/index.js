@@ -8,6 +8,7 @@ export const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addSubcommand(sub =>
       sub.setName('open').setDescription('Ouvrir un nouveau concours')
+        .addStringOption(opt => opt.setName('thème').setDescription('Thème facultatif du concours (ex: coucher de soleil)').setRequired(false))
     )
     .addSubcommand(sub =>
       sub.setName('close').setDescription('Fermer le concours actuel et annoncer les gagnants')
