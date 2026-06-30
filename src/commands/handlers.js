@@ -68,6 +68,9 @@ export async function handleInteraction(interaction, client) {
     case 'monstats':
       await handleMonStats(interaction, guildConfig);
       break;
+    case 'points':
+      await handlePoints(interaction, guildConfig, isAdmin);
+      break;
   }
 }
 
@@ -478,4 +481,57 @@ async function handleMonStats(interaction, guildConfig) {
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
+}
+
+async function handlePoints(interaction, guildConfig, isAdmin) {
+  if (!isAdmin) {
+    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    return;
+  }
+
+  const sub = interaction.options.getSubcommand();
+  const target = interaction.options.getUser('membre');
+  const amount = interaction.options.getInteger('points');
+  const reason = (interaction.options.getString('raison') ?? '').slice(0, 256) || null;
+
+  await interaction.deferReply({ ephemeral: true });
+
+  // Get or create participant
+  const { data: participant } = await supabase
+    .from('participants')
+    .select('id, discord_display_name')
+    .eq('discord_user_id', target.id)
+    .single();
+
+  if (!participant) {
+    await interaction.editReply(`❌ **${target.username}** n'a pas encore de profil dans la base de données.`);
+    return;
+  }
+
+  const { data: season } = await supabase
+    .from('seasons')
+    .select('id')
+    .eq('is_active', true)
+    .single();
+
+  if (!season) {
+    await interaction.editReply('❌ Aucune saison active.');
+    return;
+  }
+
+  const points = sub === 'retirer' ? -amount : amount;
+  const label = sub === 'retirer' ? `Retrait manuel de ${amount} pts` : `Ajout manuel de ${amount} pts`;
+
+  await supabase.from('points_ledger').insert({
+    participant_id: participant.id,
+    season_id: season.id,
+    points,
+    reason: reason ?? label,
+  });
+
+  const emoji = sub === 'retirer' ? '➖' : '➕';
+  await interaction.editReply(
+    `${emoji} **${points > 0 ? '+' : ''}${points} points** attribués à **${participant.discord_display_name}**${reason ? ` — *${reason}*` : ''}.`
+  );
+  await log(guildConfig.guild_id, `points_${sub}`, { targetId: target.id, points, reason, by: interaction.user.id });
 }
