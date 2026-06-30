@@ -4,17 +4,6 @@ import { EmbedBuilder } from 'discord.js';
 
 const POINTS_MAP = { 1: 100, 2: 75, 3: 50 };
 const VOTE_EMOJI = '❤️';
-export const TEST_MODE = process.env.CONTEST_TEST_MODE === 'true';
-
-function nextWednesdayAt18() {
-  const now = new Date();
-  const result = new Date(now);
-  // Wednesday = 3, target hour = 18
-  const daysUntilWed = (3 - now.getDay() + 7) % 7 || 7; // at least 1 day ahead
-  result.setDate(now.getDate() + daysUntilWed);
-  result.setHours(18, 0, 0, 0);
-  return result;
-}
 
 export async function openContest(guild, guildConfig, contestSettings, client) {
   const environmentId = guildConfig.environment_id;
@@ -25,9 +14,8 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
   }
 
   const startDate = new Date();
-  const endDate = TEST_MODE
-    ? new Date(startDate.getTime() + 60_000)
-    : nextWednesdayAt18();
+  // End date: next Wednesday at 18:00 by default (7 days max)
+  const endDate = new Date(startDate.getTime() + 7 * 86400_000);
 
   const { data: contest, error } = await supabase
     .from('contests')
@@ -167,9 +155,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
       // Fall through to normal close logic with reordered participations
     } else {
       // First tie detected → extend 24h
-      const newEnd = TEST_MODE
-        ? new Date(Date.now() + 60_000)
-        : new Date(Date.now() + 24 * 3600000);
+      const newEnd = new Date(Date.now() + 24 * 3600000);
       await supabase.from('contests').update({ ends_at: newEnd.toISOString(), status: 'tiebreak' }).eq('id', contest.id);
 
       if (channel) {
@@ -177,7 +163,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
           .setTitle('⚖️ Égalité ! Le concours est prolongé.')
           .setDescription(
             `<@${participations[0].participants.discord_user_id}> et <@${participations[1].participants.discord_user_id}> sont à égalité avec **${participations[0].vote_count} ❤️**.\n\n` +
-            `Le concours est prolongé de ${TEST_MODE ? '1 minute' : '24h'}. Votez pour départager ! Le concours se termine <t:${Math.floor(newEnd.getTime() / 1000)}:R>.`
+            `Le concours est prolongé de **24h**. Votez pour départager ! Le concours se termine <t:${Math.floor(newEnd.getTime() / 1000)}:R>.`
           )
           .setColor(0xff9900)
           .setTimestamp();
@@ -189,22 +175,18 @@ export async function closeContest(guild, guildConfig, contest, client) {
     }
   }
 
-  // Fetch winner image URL BEFORE deleting messages
-  let imageUrl = null;
-  if (channel && participations[0].message_id) {
-    try {
-      const msg = await channel.messages.fetch(participations[0].message_id).catch(() => null);
-      if (msg) {
-        const attachment = msg.attachments.find(a => a.contentType?.startsWith('image/'));
-        imageUrl = attachment?.url ?? msg.embeds.find(e => e.image)?.image?.url ?? null;
-      }
-    } catch { /* fall back to stored url */ }
-    if (!imageUrl) imageUrl = participations[0].image_url;
-  }
+  // Close contest in DB immediately to prevent re-entry
+  await supabase.from('contests').update({
+    status: 'closed',
+    winner_participation_id: participations[0].id,
+    winner_discord_user_id: participations[0].participants.discord_user_id,
+    closed_at: new Date().toISOString(),
+  }).eq('id', contest.id);
 
-  // Delete participation messages and opening messages from Discord channel
+  // Delete non-winner participation messages and opening messages
+  // Winner's photo message is kept in the channel
   if (channel) {
-    for (const p of participations) {
+    for (const p of participations.slice(1)) {
       if (p.message_id) await channel.messages.delete(p.message_id).catch(() => null);
     }
     if (contest.opening_message_id) await channel.messages.delete(contest.opening_message_id).catch(() => null);
@@ -226,14 +208,6 @@ export async function closeContest(guild, guildConfig, contest, client) {
     });
   }
 
-  // Mark winner (only 1st place)
-  await supabase.from('contests').update({
-    status: 'closed',
-    winner_participation_id: participations[0].id,
-    winner_discord_user_id: participations[0].participants.discord_user_id,
-    closed_at: new Date().toISOString(),
-  }).eq('id', contest.id);
-
   // Assign/remove "Photographe de la semaine" role
   await updatePhotographerRole(guild, guildConfig, contest, participations[0]);
 
@@ -243,7 +217,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
     const startLabel = new Date(contest.started_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const endLabel   = new Date(contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    await channel.send(`@everyone 🏆 Le concours screenshot de la semaine est **terminé** ! Voici les résultats !`);
+    await channel.send(`@everyone 🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** !`);
 
     let podium = `🥇 <@${winner.participants.discord_user_id}> — **${winner.vote_count} ❤️**`;
     if (participations[1]) podium += `\n🥈 <@${participations[1].participants.discord_user_id}> — ${participations[1].vote_count} ❤️`;
@@ -260,7 +234,6 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name} • Communauté TraaaKe` })
       .setTimestamp();
 
-    if (imageUrl) embed.setImage(imageUrl);
     await channel.send({ embeds: [embed] });
   }
 
