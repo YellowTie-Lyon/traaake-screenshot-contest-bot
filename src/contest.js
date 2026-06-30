@@ -230,12 +230,12 @@ export async function closeContest(guild, guildConfig, contest, client) {
     if (participations[2]) podium += `\n🥉 <@${participations[2].participants.discord_user_id}> — ${participations[2].vote_count} ❤️`;
 
     const embedWinner = new EmbedBuilder()
-      .setTitle(`🏆 Photographe de la semaine — ${winner.participants.discord_display_name}`)
+      .setTitle(`📸 Photographe de la semaine — ${winner.participants.discord_display_name}`)
       .setDescription(podium)
       .setColor(0xffd700)
       .addFields(
         { name: '📅 Semaine du', value: `${startLabel} au ${endLabel}`, inline: true },
-        { name: '📸 Classement', value: '[Voir sur trakr.fr](https://trakr.fr)', inline: true },
+        { name: '🏆 Classement', value: '[Voir sur trakr.fr](https://trakr.fr)', inline: true },
       )
       .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name}` })
       .setTimestamp();
