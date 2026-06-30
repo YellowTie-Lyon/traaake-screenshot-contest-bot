@@ -53,28 +53,37 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
     const endLabel   = endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const closeTimestamp = Math.floor(endDate.getTime() / 1000);
 
-    await channel.send(
-      `@everyone ! Le concours du photographe de la semaine est **OUVERT** ✅ A vous de jouer !\n` +
-      `📅 **Du** ${startLabel} **au** ${endLabel} — ferme <t:${closeTimestamp}:R>`
-    );
+    await channel.send(`@everyone ✈️ Le concours screenshot de la semaine est **ouvert** ! À vos plus beaux clichés !`);
 
-    const embed = new EmbedBuilder()
-      .setTitle('CONCOURS SCREENSHOTS')
+    const embedAnnonce = new EmbedBuilder()
+      .setTitle('📸 Concours Screenshot — Communauté TraaaKe')
       .setDescription(
-        `**Comment participer ?**\n` +
-        `Chaque semaine, tentez de remporter le titre de **PHOTOGRAPHE DE LA SEMAINE** en postant votre meilleur screenshot sur Microsoft Flight Simulator 2020 & 2024 ✈️\n` +
-        `Le screenshot avec le plus de ❤️ remporte le concours et son propriétaire obtient le rôle **PHOTOGRAPHE DE LA SEMAINE** 🎉\n\n` +
-        `**Règles du concours :**\n` +
-        `🔷 Les screenshots doivent provenir **uniquement** de Microsoft Flight Simulator 2020 & 2024 !\n` +
-        `🔷 Un **seul** screenshot, **supprimez l'ancien** pour en poster un nouveau\n` +
-        `🔷 Les screenshots doivent **vous appartenir**, sous peine de sanctions\n` +
-        `🔷 Les **streamers/youtubers** ne peuvent pas participer au concours\n` +
-        `🔷 Les screenshots jugés troll, offensant ou inapproprié par les modérateurs seront supprimés.\n` +
-        `🔷 Le concours screenshots est relancé chaque mercredi soir`
+        `Postez votre plus beau screenshot sur **Microsoft Flight Simulator 2020 ou 2024** et récoltez le plus de ❤️ !\n` +
+        `Le gagnant obtient le rôle **Photographe de la semaine** 🏆`
       )
-      .setColor(0x2b2d31);
+      .setColor(0x5865f2)
+      .addFields(
+        { name: '📅 Ouverture', value: startLabel, inline: true },
+        { name: '🏁 Fermeture', value: endLabel, inline: true },
+        { name: '⏳ Temps restant', value: `<t:${closeTimestamp}:R>`, inline: true },
+        { name: '🏆 Classement saison', value: '[Voir le classement sur trakr.fr](https://trakr.fr)', inline: false },
+      )
+      .setFooter({ text: 'Relancé chaque mercredi à 18h00 • Communauté TraaaKe' });
 
-    await channel.send({ embeds: [embed] });
+    const embedRegles = new EmbedBuilder()
+      .setTitle('📋 Règles du concours')
+      .setDescription(
+        `✅ Screenshots **Microsoft Flight Simulator 2020 & 2024 uniquement**\n` +
+        `✅ **Une seule photo** par concours — supprime l'ancienne pour en changer\n` +
+        `✅ Le screenshot doit **t'appartenir**\n` +
+        `❌ Les **streamers / youtubers** ne peuvent pas participer\n` +
+        `❌ Screenshots **troll, offensants ou inappropriés** supprimés par la modération\n` +
+        `❌ **Pas de texte** avec l'image — poste uniquement la photo`
+      )
+      .setColor(0x2b2d31)
+      .setFooter({ text: 'Toute infraction peut entraîner une exclusion du concours' });
+
+    await channel.send({ embeds: [embedAnnonce, embedRegles] });
   }
 
   await log(guild.id, 'contest_opened', { contestId: contest.id, seasonId: season.id });
@@ -192,13 +201,22 @@ export async function closeContest(guild, guildConfig, contest, client) {
     const startLabel = new Date(contest.started_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const endLabel   = new Date(contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    await channel.send(
-      `🏆 **Le gagnant du concours screenshot de la semaine du ${startLabel} au ${endLabel} est <@${winner.participants.discord_user_id}> avec ${winner.vote_count} ❤️ !**`
-    );
+    await channel.send(`@everyone 🏆 Le concours screenshot de la semaine est **terminé** ! Voici les résultats !`);
+
+    let podium = `🥇 <@${winner.participants.discord_user_id}> — **${winner.vote_count} ❤️**`;
+    if (participations[1]) podium += `\n🥈 <@${participations[1].participants.discord_user_id}> — ${participations[1].vote_count} ❤️`;
+    if (participations[2]) podium += `\n🥉 <@${participations[2].participants.discord_user_id}> — ${participations[2].vote_count} ❤️`;
 
     const embed = new EmbedBuilder()
-      .setDescription(`📸 <@${winner.participants.discord_user_id}>`)
-      .setColor(0xffd700);
+      .setTitle(`🏆 Photographe de la semaine — ${winner.participants.discord_display_name}`)
+      .setDescription(podium)
+      .setColor(0xffd700)
+      .addFields(
+        { name: '📅 Semaine du', value: `${startLabel} au ${endLabel}`, inline: true },
+        { name: '🏆 Classement saison', value: '[Voir sur trakr.fr](https://trakr.fr)', inline: true },
+      )
+      .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name} • Communauté TraaaKe` })
+      .setTimestamp();
 
     if (winner.image_url) embed.setImage(winner.image_url);
     await channel.send({ embeds: [embed] });
