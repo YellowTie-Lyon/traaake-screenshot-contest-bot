@@ -257,6 +257,9 @@ async function handleReset(interaction, guildConfig, isAdmin) {
     await supabase.from('participations').delete().in('contest_id', contestIds);
   }
 
+  // Delete all remaining points_ledger entries (historical imports without contest_id)
+  await supabase.from('points_ledger').delete().is('contest_id', null);
+
   // Delete participants
   await supabase.from('participants').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
