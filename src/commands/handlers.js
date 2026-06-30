@@ -5,6 +5,27 @@ import { log } from '../logger.js';
 import { supabase } from '../supabase.js';
 import { checkContests } from '../scheduler.js';
 
+// Rate limiting: max 2 uses per user per 30s for public commands
+const rateLimitMap = new Map();
+const RATE_LIMIT_COMMANDS = new Set(['classement', 'monstats']);
+const RATE_LIMIT_MAX = 2;
+const RATE_LIMIT_WINDOW = 30_000;
+
+function isRateLimited(userId, command) {
+  if (!RATE_LIMIT_COMMANDS.has(command)) return false;
+  const key = `${userId}:${command}`;
+  const now = Date.now();
+  const entry = rateLimitMap.get(key) ?? { count: 0, resetAt: now + RATE_LIMIT_WINDOW };
+  if (now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return false;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return true;
+  entry.count++;
+  rateLimitMap.set(key, entry);
+  return false;
+}
+
 export async function handleInteraction(interaction, client) {
   if (!interaction.isChatInputCommand()) return;
 
@@ -17,6 +38,12 @@ export async function handleInteraction(interaction, client) {
   }
 
   const { guildConfig, contestSettings } = config;
+
+  // Rate limiting for public commands
+  if (isRateLimited(interaction.user.id, interaction.commandName)) {
+    await interaction.reply({ content: '⏳ Tu utilises cette commande trop souvent. Réessaie dans quelques secondes.', ephemeral: true });
+    return;
+  }
 
   // Check admin role for management commands
   const isAdmin = interaction.member.roles.cache.has(guildConfig.admin_role_id)
@@ -37,6 +64,12 @@ export async function handleInteraction(interaction, client) {
       break;
     case 'purge':
       await handlePurge(interaction, guildConfig, isAdmin);
+      break;
+    case 'monstats':
+      await handleMonStats(interaction, guildConfig);
+      break;
+    case 'points':
+      await handlePoints(interaction, guildConfig, isAdmin);
       break;
   }
 }
@@ -167,7 +200,7 @@ async function handleLeaderboard(interaction, guildConfig) {
       sorted.map((e, i) => `${medals[i] ?? `${i + 1}.`} **${e.username}** — ${e.points} pts`).join('\n')
     )
     .addFields({ name: '📊 Classement complet', value: '[Voir le classement complet sur trakr.fr](https://trakr.fr)', inline: false })
-    .setFooter({ text: 'Classement mis à jour en temps réel' })
+    .setFooter({ text: 'Classement mis à jour en temps réel • /monstats pour voir tes statistiques personnelles' })
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
@@ -227,6 +260,9 @@ async function handleReset(interaction, guildConfig, isAdmin) {
     await supabase.from('participations').delete().in('contest_id', contestIds);
   }
 
+  // Delete all remaining points_ledger entries (historical imports without contest_id)
+  await supabase.from('points_ledger').delete().is('contest_id', null);
+
   // Delete participants
   await supabase.from('participants').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
@@ -257,7 +293,7 @@ async function handleBan(interaction, guildConfig, isAdmin) {
   }
 
   const target = interaction.options.getUser('membre');
-  const reason = interaction.options.getString('raison') ?? null;
+  const reason = (interaction.options.getString('raison') ?? '').slice(0, 256) || null;
   const dureeStr = interaction.options.getString('durée') ?? null;
   const expiresAt = parseDuration(dureeStr);
 
@@ -387,4 +423,115 @@ async function handlePurge(interaction, guildConfig, isAdmin) {
 
   await interaction.editReply(`✅ ${deleted} message(s) supprimé(s) du salon concours.`);
   await log(interaction.guildId, 'channel_purged', { triggeredBy: interaction.user.id, count: deleted });
+}
+
+async function handleMonStats(interaction, guildConfig) {
+  await interaction.deferReply({ ephemeral: true });
+
+  const discordUserId = interaction.user.id;
+
+  const { data: participant } = await supabase
+    .from('participants')
+    .select('id, discord_display_name, win_count, participation_count')
+    .eq('discord_user_id', discordUserId)
+    .single();
+
+  if (!participant) {
+    await interaction.editReply('Tu n\'as pas encore participé à un concours screenshot.');
+    return;
+  }
+
+  // Points de la saison en cours
+  const { data: season } = await supabase
+    .from('seasons')
+    .select('id, name')
+    .eq('is_active', true)
+    .single();
+
+  let seasonPoints = 0;
+  if (season) {
+    const { data: ledger } = await supabase
+      .from('points_ledger')
+      .select('points')
+      .eq('participant_id', participant.id)
+      .eq('season_id', season.id);
+    seasonPoints = ledger?.reduce((sum, r) => sum + r.points, 0) ?? 0;
+  }
+
+  // Meilleur score (max votes sur une participation)
+  const { data: best } = await supabase
+    .from('participations')
+    .select('vote_count')
+    .eq('participant_id', participant.id)
+    .order('vote_count', { ascending: false })
+    .limit(1)
+    .single();
+
+  const embed = new EmbedBuilder()
+    .setTitle(`📊 Tes stats — ${participant.discord_display_name}`)
+    .setColor(0x5865f2)
+    .addFields(
+      { name: '🏆 Victoires', value: String(participant.win_count), inline: true },
+      { name: '📸 Participations', value: String(participant.participation_count), inline: true },
+      { name: `✨ Points ${season?.name ?? 'saison'}`, value: String(seasonPoints), inline: true },
+      { name: '❤️ Meilleur score', value: best ? `${best.vote_count} votes` : 'N/A', inline: true },
+    )
+    .addFields({ name: '📊 Classement complet', value: '[Voir sur trakr.fr](https://trakr.fr)', inline: false })
+    .setFooter({ text: 'Statistiques mises à jour en temps réel' })
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handlePoints(interaction, guildConfig, isAdmin) {
+  if (!isAdmin) {
+    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    return;
+  }
+
+  const sub = interaction.options.getSubcommand();
+  const target = interaction.options.getUser('membre');
+  const amount = interaction.options.getInteger('points');
+  const reason = (interaction.options.getString('raison') ?? '').slice(0, 256) || null;
+
+  await interaction.deferReply({ ephemeral: true });
+
+  // Get or create participant
+  const { data: participant } = await supabase
+    .from('participants')
+    .select('id, discord_display_name')
+    .eq('discord_user_id', target.id)
+    .single();
+
+  if (!participant) {
+    await interaction.editReply(`❌ **${target.username}** n'a pas encore de profil dans la base de données.`);
+    return;
+  }
+
+  const { data: season } = await supabase
+    .from('seasons')
+    .select('id')
+    .eq('is_active', true)
+    .single();
+
+  if (!season) {
+    await interaction.editReply('❌ Aucune saison active.');
+    return;
+  }
+
+  const points = sub === 'retirer' ? -amount : amount;
+  const label = sub === 'retirer' ? `Retrait manuel de ${amount} pts` : `Ajout manuel de ${amount} pts`;
+
+  await supabase.from('points_ledger').insert({
+    participant_id: participant.id,
+    season_id: season.id,
+    points,
+    reason: reason ?? label,
+  });
+
+  const emoji = sub === 'retirer' ? '➖' : '➕';
+  await interaction.editReply(
+    `${emoji} **${points > 0 ? '+' : ''}${points} points** attribués à **${participant.discord_display_name}**${reason ? ` — *${reason}*` : ''}.`
+  );
+  await log(guildConfig.guild_id, `points_${sub}`, { targetId: target.id, points, reason, by: interaction.user.id });
 }

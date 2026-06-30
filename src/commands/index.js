@@ -54,6 +54,28 @@ export const commands = [
     .setName('purge')
     .setDescription('[TEMP] Supprimer tous les messages du salon concours (admin uniquement)'),
 
+  new SlashCommandBuilder()
+    .setName('monstats')
+    .setDescription('Voir tes statistiques de participation au concours screenshot'),
+
+  new SlashCommandBuilder()
+    .setName('points')
+    .setDescription('Gérer les points d\'un membre (admin)')
+    .addSubcommand(sub =>
+      sub.setName('ajouter')
+        .setDescription('Ajouter des points à un membre')
+        .addUserOption(opt => opt.setName('membre').setDescription('Membre ciblé').setRequired(true))
+        .addIntegerOption(opt => opt.setName('points').setDescription('Nombre de points à ajouter').setMinValue(1).setRequired(true))
+        .addStringOption(opt => opt.setName('raison').setDescription('Raison').setRequired(false))
+    )
+    .addSubcommand(sub =>
+      sub.setName('retirer')
+        .setDescription('Retirer des points à un membre')
+        .addUserOption(opt => opt.setName('membre').setDescription('Membre ciblé').setRequired(true))
+        .addIntegerOption(opt => opt.setName('points').setDescription('Nombre de points à retirer').setMinValue(1).setRequired(true))
+        .addStringOption(opt => opt.setName('raison').setDescription('Raison').setRequired(false))
+    ),
+
 ].map(cmd => cmd.toJSON());
 
 export async function registerCommands(client, token) {
