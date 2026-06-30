@@ -84,15 +84,16 @@ export async function connectBot(env) {
     const config = await getGuildConfig(message.guildId);
     if (!config) return;
     if (message.channelId !== config.guildConfig.contest_channel_id) return;
-    // Admins and moderators (ManageMessages) bypass all restrictions
-    if (message.member?.permissions.has('ManageMessages')) return;
+    const isMod = message.member?.permissions.has('ManageMessages') ?? false;
     const contest = await getActiveContest(config.guildConfig.environment_id);
     if (!contest) {
-      // No active contest → delete the message and notify the user
-      await message.delete().catch(() => null);
-      await message.author.send(
-        `❌ Le salon **#${message.channel?.name ?? 'concours'}** est réservé au concours screenshot.\nAucun concours n'est ouvert pour le moment.`
-      ).catch(() => null);
+      // No active contest → admins/mods can write freely, others are blocked
+      if (!isMod) {
+        await message.delete().catch(() => null);
+        await message.author.send(
+          `❌ Le salon **#${message.channel?.name ?? 'concours'}** est réservé au concours screenshot.\nAucun concours n'est ouvert pour le moment.`
+        ).catch(() => null);
+      }
       return;
     }
     await handleScreenshotMessage(message, config.guildConfig, contest);
