@@ -3,8 +3,16 @@ import { log } from './logger.js';
 
 const VOTE_EMOJI = '❤️';
 
+function getImageAttachments(message) {
+  return message.attachments.filter(a => a.contentType?.startsWith('image/'));
+}
+
+function hasNonImageAttachment(message) {
+  return message.attachments.some(a => !a.contentType?.startsWith('image/'));
+}
+
 function hasImage(message) {
-  if (message.attachments.some(a => a.contentType?.startsWith('image/'))) return true;
+  if (getImageAttachments(message).size > 0) return true;
   if (message.embeds.some(e => e.image || e.thumbnail)) return true;
   return false;
 }
@@ -14,7 +22,7 @@ function hasTextContent(message) {
 }
 
 function getImageUrl(message) {
-  const attachment = message.attachments.find(a => a.contentType?.startsWith('image/'));
+  const attachment = getImageAttachments(message).first();
   if (attachment) return attachment.url;
   const embed = message.embeds.find(e => e.image || e.thumbnail);
   return embed?.image?.url ?? embed?.thumbnail?.url ?? null;
@@ -32,12 +40,32 @@ async function sendDM(user, text) {
 export async function handleScreenshotMessage(message, guildConfig, contest) {
   const hasImg = hasImage(message);
   const hasText = hasTextContent(message);
+  const imageAttachments = getImageAttachments(message);
+  const hasNonImage = hasNonImageAttachment(message);
 
-  // Delete message and DM user if it's text-only or text+image
+  // Fichier non-image (vidéo, PDF, etc.)
+  if (hasNonImage) {
+    await message.delete().catch(() => null);
+    await sendDM(message.author,
+      `❌ **Salon concours** : seules les images sont autorisées. Les autres types de fichiers ne sont pas acceptés.`
+    );
+    return false;
+  }
+
+  // Plusieurs images dans un seul message
+  if (imageAttachments.size > 1) {
+    await message.delete().catch(() => null);
+    await sendDM(message.author,
+      `❌ **Salon concours** : une seule image par message. Reposte uniquement ta meilleure photo.`
+    );
+    return false;
+  }
+
+  // Pas d'image du tout
   if (!hasImg) {
     await message.delete().catch(() => null);
     await sendDM(message.author,
-      `❌ **Salon concours** : seules les images sont autorisées dans ce salon. Pas de texte sans image.`
+      `❌ **Salon concours** : seules les images sont autorisées dans ce salon.`
     );
     return false;
   }
