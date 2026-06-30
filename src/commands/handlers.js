@@ -38,6 +38,9 @@ export async function handleInteraction(interaction, client) {
     case 'purge':
       await handlePurge(interaction, guildConfig, isAdmin);
       break;
+    case 'monstats':
+      await handleMonStats(interaction, guildConfig);
+      break;
   }
 }
 
@@ -387,4 +390,62 @@ async function handlePurge(interaction, guildConfig, isAdmin) {
 
   await interaction.editReply(`✅ ${deleted} message(s) supprimé(s) du salon concours.`);
   await log(interaction.guildId, 'channel_purged', { triggeredBy: interaction.user.id, count: deleted });
+}
+
+async function handleMonStats(interaction, guildConfig) {
+  await interaction.deferReply({ ephemeral: true });
+
+  const discordUserId = interaction.user.id;
+
+  const { data: participant } = await supabase
+    .from('participants')
+    .select('id, discord_display_name, win_count, participation_count')
+    .eq('discord_user_id', discordUserId)
+    .single();
+
+  if (!participant) {
+    await interaction.editReply('Tu n\'as pas encore participé à un concours screenshot.');
+    return;
+  }
+
+  // Points de la saison en cours
+  const { data: season } = await supabase
+    .from('seasons')
+    .select('id, name')
+    .eq('is_active', true)
+    .single();
+
+  let seasonPoints = 0;
+  if (season) {
+    const { data: ledger } = await supabase
+      .from('points_ledger')
+      .select('points')
+      .eq('participant_id', participant.id)
+      .eq('season_id', season.id);
+    seasonPoints = ledger?.reduce((sum, r) => sum + r.points, 0) ?? 0;
+  }
+
+  // Meilleur score (max votes sur une participation)
+  const { data: best } = await supabase
+    .from('participations')
+    .select('vote_count')
+    .eq('participant_id', participant.id)
+    .order('vote_count', { ascending: false })
+    .limit(1)
+    .single();
+
+  const embed = new EmbedBuilder()
+    .setTitle(`📊 Tes stats — ${participant.discord_display_name}`)
+    .setColor(0x5865f2)
+    .addFields(
+      { name: '🏆 Victoires', value: String(participant.win_count), inline: true },
+      { name: '📸 Participations', value: String(participant.participation_count), inline: true },
+      { name: `✨ Points ${season?.name ?? 'saison'}`, value: String(seasonPoints), inline: true },
+      { name: '❤️ Meilleur score', value: best ? `${best.vote_count} votes` : 'N/A', inline: true },
+    )
+    .addFields({ name: '📊 Classement complet', value: '[Voir sur trakr.fr](https://trakr.fr)', inline: false })
+    .setFooter({ text: 'Statistiques mises à jour en temps réel' })
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
 }

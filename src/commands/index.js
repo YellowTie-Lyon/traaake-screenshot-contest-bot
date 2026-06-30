@@ -54,6 +54,10 @@ export const commands = [
     .setName('purge')
     .setDescription('[TEMP] Supprimer tous les messages du salon concours (admin uniquement)'),
 
+  new SlashCommandBuilder()
+    .setName('monstats')
+    .setDescription('Voir tes statistiques de participation au concours screenshot'),
+
 ].map(cmd => cmd.toJSON());
 
 export async function registerCommands(client, token) {
