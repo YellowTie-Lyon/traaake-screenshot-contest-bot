@@ -84,6 +84,8 @@ export async function connectBot(env) {
     const config = await getGuildConfig(message.guildId);
     if (!config) return;
     if (message.channelId !== config.guildConfig.contest_channel_id) return;
+    // Admins and moderators (ManageMessages) bypass all restrictions
+    if (message.member?.permissions.has('ManageMessages')) return;
     const contest = await getActiveContest(config.guildConfig.environment_id);
     if (!contest) {
       // No active contest → delete the message and notify the user
@@ -105,29 +107,41 @@ export async function connectBot(env) {
     const config = await getGuildConfig(guildId);
     if (!config) return;
 
-    // Block reactions on past winner photos (closed contests)
     if (r.message.channelId === config.guildConfig.contest_channel_id) {
-      const { data: closedParticipation } = await supabase
-        .from('participations')
-        .select('id, contests!inner(status)')
-        .eq('message_id', r.message.id)
-        .eq('contests.status', 'closed')
-        .limit(1)
-        .single();
-      if (closedParticipation) {
-        await r.users.remove(user.id).catch(() => null);
+      // Fetch member to check moderator bypass
+      const guild = r.message.guild;
+      const member = await guild?.members.fetch(user.id).catch(() => null);
+      const isMod = member?.permissions.has('ManageMessages') ?? false;
+
+      if (!isMod) {
+        // Block reactions on past winner photos (closed contests)
+        const { data: closedParticipation } = await supabase
+          .from('participations')
+          .select('id, contests!inner(status)')
+          .eq('message_id', r.message.id)
+          .eq('contests.status', 'closed')
+          .limit(1)
+          .single();
+        if (closedParticipation) {
+          await r.users.remove(user.id).catch(() => null);
+          return;
+        }
+
+        // Only allow ❤️ during active contest
+        const contest = await getActiveContest(config.guildConfig.environment_id);
+        if (contest && r.emoji.name !== '❤️') {
+          await r.users.remove(user.id).catch(() => null);
+          return;
+        }
+
+        if (!contest) return;
+        await handleVoteReaction(r, user, true, guildId, contest);
         return;
       }
     }
 
     const contest = await getActiveContest(config.guildConfig.environment_id);
     if (!contest) return;
-
-    // Only allow ❤️ on participation messages during active contest
-    if (r.message.channelId === config.guildConfig.contest_channel_id && r.emoji.name !== '❤️') {
-      await r.users.remove(user.id).catch(() => null);
-      return;
-    }
 
     await handleVoteReaction(r, user, true, guildId, contest);
   });
@@ -141,16 +155,20 @@ export async function connectBot(env) {
     const config = await getGuildConfig(guildId);
     if (!config) return;
 
-    // Ignore reaction removal on past winner photos (closed contests)
+    // Ignore reaction removal on past winner photos (closed contests), unless mod
     if (r.message.channelId === config.guildConfig.contest_channel_id) {
-      const { data: closedParticipation } = await supabase
-        .from('participations')
-        .select('id, contests!inner(status)')
-        .eq('message_id', r.message.id)
-        .eq('contests.status', 'closed')
-        .limit(1)
-        .single();
-      if (closedParticipation) return;
+      const member = await r.message.guild?.members.fetch(user.id).catch(() => null);
+      const isMod = member?.permissions.has('ManageMessages') ?? false;
+      if (!isMod) {
+        const { data: closedParticipation } = await supabase
+          .from('participations')
+          .select('id, contests!inner(status)')
+          .eq('message_id', r.message.id)
+          .eq('contests.status', 'closed')
+          .limit(1)
+          .single();
+        if (closedParticipation) return;
+      }
     }
 
     const contest = await getActiveContest(config.guildConfig.environment_id);
