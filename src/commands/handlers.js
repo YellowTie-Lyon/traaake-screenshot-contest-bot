@@ -64,8 +64,14 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
       return;
     }
     await interaction.deferReply({ ephemeral: true });
-    await closeContest(guild, guildConfig, activeContest, client);
-    await interaction.editReply('✅ Concours fermé et gagnants annoncés !');
+    const result = await closeContest(guild, guildConfig, activeContest, client);
+    if (result?.noEntries) {
+      await interaction.editReply('✅ Concours fermé — aucune participation cette semaine.');
+    } else if (result?.tied) {
+      await interaction.editReply('⚖️ Égalité détectée — le concours est prolongé de 24h.');
+    } else {
+      await interaction.editReply('✅ Concours fermé et gagnants annoncés !');
+    }
 
   } else if (sub === 'check') {
     await interaction.deferReply({ ephemeral: true });

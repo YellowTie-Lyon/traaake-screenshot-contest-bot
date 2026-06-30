@@ -101,8 +101,17 @@ export async function closeContest(guild, guildConfig, contest, client) {
 
   if (!participations || participations.length === 0) {
     await supabase.from('contests').update({ status: 'closed', closed_at: new Date().toISOString() }).eq('id', contest.id);
+    if (channel) {
+      const embed = new EmbedBuilder()
+        .setTitle('📸 Concours terminé — Aucune participation')
+        .setDescription('Personne n\'a participé à ce concours. Rendez-vous mercredi prochain pour le prochain concours !')
+        .setColor(0x2b2d31)
+        .setFooter({ text: 'Communauté TraaaKe • trakr.fr' })
+        .setTimestamp();
+      await channel.send({ embeds: [embed] });
+    }
     await log(guild.id, 'contest_closed_no_entries', { contestId: contest.id });
-    return { tied: false };
+    return { tied: false, noEntries: true };
   }
 
   // Check for tie between top 2
