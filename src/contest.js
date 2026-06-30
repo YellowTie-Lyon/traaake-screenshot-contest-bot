@@ -49,7 +49,7 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
     const endLabel   = endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const closeTimestamp = Math.floor(endDate.getTime() / 1000);
 
-    const openMsg = await channel.send(`@everyone ✈️ Le concours screenshot de la semaine est **ouvert** ! À vos plus beaux clichés !`);
+    const openMsg = await channel.send({ content: `@everyone ✈️ Le concours screenshot de la semaine est **ouvert** ! À vos plus beaux clichés !`, allowedMentions: { parse: ['everyone'] } });
 
     const embedAnnonce = new EmbedBuilder()
       .setTitle('📸 Concours Screenshot — Communauté TraaaKe')
@@ -239,11 +239,17 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name} • Communauté TraaaKe` })
       .setTimestamp();
 
-    // Edit the opening text message
+    // Ping @everyone via a new message (edit ne re-notifie pas Discord)
+    await channel.send({
+      content: `@everyone 🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** !`,
+      allowedMentions: { parse: ['everyone'] },
+    });
+
+    // Edit the opening text message (remove the ouverture ping)
     if (contest.opening_message_id) {
       const openMsg = await channel.messages.fetch(contest.opening_message_id).catch(() => null);
       if (openMsg) {
-        await openMsg.edit(`@everyone 🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** !`).catch(() => null);
+        await openMsg.edit(`🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** !`).catch(() => null);
       }
     }
 

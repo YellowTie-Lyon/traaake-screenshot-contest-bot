@@ -156,20 +156,16 @@ export async function connectBot(env) {
     const config = await getGuildConfig(guildId);
     if (!config) return;
 
-    // Ignore reaction removal on past winner photos (closed contests), unless mod
+    // Block reaction removal on past winner photos for everyone (closed contests)
     if (r.message.channelId === config.guildConfig.contest_channel_id) {
-      const member = await r.message.guild?.members.fetch(user.id).catch(() => null);
-      const isMod = member?.permissions.has('ManageMessages') ?? false;
-      if (!isMod) {
-        const { data: closedParticipation } = await supabase
-          .from('participations')
-          .select('id, contests!inner(status)')
-          .eq('message_id', r.message.id)
-          .eq('contests.status', 'closed')
-          .limit(1)
-          .single();
-        if (closedParticipation) return;
-      }
+      const { data: closedParticipation } = await supabase
+        .from('participations')
+        .select('id, contests!inner(status)')
+        .eq('message_id', r.message.id)
+        .eq('contests.status', 'closed')
+        .limit(1)
+        .single();
+      if (closedParticipation) return;
     }
 
     const contest = await getActiveContest(config.guildConfig.environment_id);
