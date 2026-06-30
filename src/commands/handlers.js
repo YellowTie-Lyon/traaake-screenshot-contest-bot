@@ -157,7 +157,7 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
 }
 
 async function handleLeaderboard(interaction, guildConfig) {
-  await interaction.deferReply();
+  await interaction.deferReply({ ephemeral: true });
 
   const { data: season } = await supabase
     .from('seasons')
@@ -204,8 +204,6 @@ async function handleLeaderboard(interaction, guildConfig) {
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
-  const reply = await interaction.fetchReply().catch(() => null);
-  if (reply) setTimeout(() => reply.delete().catch(() => null), 10_000);
 }
 
 async function handleReset(interaction, guildConfig, isAdmin) {
