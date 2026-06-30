@@ -5,6 +5,15 @@ import { EmbedBuilder } from 'discord.js';
 const POINTS_MAP = { 1: 100, 2: 75, 3: 50 };
 const VOTE_EMOJI = '❤️';
 
+function nextWednesdayAt18() {
+  const now = new Date();
+  const result = new Date(now);
+  const daysUntilWed = (3 - now.getDay() + 7) % 7 || 7; // at least 1 day ahead
+  result.setDate(now.getDate() + daysUntilWed);
+  result.setHours(18, 0, 0, 0);
+  return result;
+}
+
 export async function openContest(guild, guildConfig, contestSettings, client) {
   const environmentId = guildConfig.environment_id;
 
@@ -14,8 +23,7 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
   }
 
   const startDate = new Date();
-  // End date: next Wednesday at 18:00 by default (7 days max)
-  const endDate = new Date(startDate.getTime() + 7 * 86400_000);
+  const endDate = nextWednesdayAt18();
 
   const { data: contest, error } = await supabase
     .from('contests')
@@ -107,7 +115,16 @@ export async function closeContest(guild, guildConfig, contest, client) {
         .setColor(0x2b2d31)
         .setFooter({ text: 'Communauté TraaaKe • trakr.fr' })
         .setTimestamp();
-      await channel.send({ embeds: [embed] });
+
+      // Edit opening messages in place
+      if (contest.opening_message_id) {
+        const openMsg = await channel.messages.fetch(contest.opening_message_id).catch(() => null);
+        if (openMsg) await openMsg.edit('📸 Le concours screenshot est **terminé** — aucune participation cette semaine.').catch(() => null);
+      }
+      if (contest.rules_message_id) {
+        const rulesMsg = await channel.messages.fetch(contest.rules_message_id).catch(() => null);
+        if (rulesMsg) await rulesMsg.edit({ embeds: [embed] }).catch(() => null);
+      }
     }
     await log(guild.id, 'contest_closed_no_entries', { contestId: contest.id });
     return { tied: false, noEntries: true };
@@ -183,16 +200,6 @@ export async function closeContest(guild, guildConfig, contest, client) {
     closed_at: new Date().toISOString(),
   }).eq('id', contest.id);
 
-  // Delete non-winner participation messages and opening messages
-  // Winner's photo message is kept in the channel
-  if (channel) {
-    for (const p of participations.slice(1)) {
-      if (p.message_id) await channel.messages.delete(p.message_id).catch(() => null);
-    }
-    if (contest.opening_message_id) await channel.messages.delete(contest.opening_message_id).catch(() => null);
-    if (contest.rules_message_id) await channel.messages.delete(contest.rules_message_id).catch(() => null);
-  }
-
   // Award points to top 3
   for (let i = 0; i < Math.min(3, participations.length); i++) {
     const participation = participations[i];
@@ -211,19 +218,17 @@ export async function closeContest(guild, guildConfig, contest, client) {
   // Assign/remove "Photographe de la semaine" role
   await updatePhotographerRole(guild, guildConfig, contest, participations[0]);
 
-  // Announce winner
+  // Edit opening messages in place so winner announcement stays above the winner photo
   if (channel) {
     const winner = participations[0];
     const startLabel = new Date(contest.started_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const endLabel   = new Date(contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    await channel.send(`@everyone 🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** !`);
-
     let podium = `🥇 <@${winner.participants.discord_user_id}> — **${winner.vote_count} ❤️**`;
     if (participations[1]) podium += `\n🥈 <@${participations[1].participants.discord_user_id}> — ${participations[1].vote_count} ❤️`;
     if (participations[2]) podium += `\n🥉 <@${participations[2].participants.discord_user_id}> — ${participations[2].vote_count} ❤️`;
 
-    const embed = new EmbedBuilder()
+    const embedWinner = new EmbedBuilder()
       .setTitle(`🏆 Photographe de la semaine — ${winner.participants.discord_display_name}`)
       .setDescription(podium)
       .setColor(0xffd700)
@@ -234,7 +239,26 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name} • Communauté TraaaKe` })
       .setTimestamp();
 
-    await channel.send({ embeds: [embed] });
+    // Edit the opening text message
+    if (contest.opening_message_id) {
+      const openMsg = await channel.messages.fetch(contest.opening_message_id).catch(() => null);
+      if (openMsg) {
+        await openMsg.edit(`@everyone 🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** !`).catch(() => null);
+      }
+    }
+
+    // Edit the rules/announce embed message → winner embed
+    if (contest.rules_message_id) {
+      const rulesMsg = await channel.messages.fetch(contest.rules_message_id).catch(() => null);
+      if (rulesMsg) {
+        await rulesMsg.edit({ embeds: [embedWinner] }).catch(() => null);
+      }
+    }
+
+    // Delete non-winner participation photos (winner's photo stays below)
+    for (const p of participations.slice(1)) {
+      if (p.message_id) await channel.messages.delete(p.message_id).catch(() => null);
+    }
   }
 
   await log(guild.id, 'contest_closed', {
