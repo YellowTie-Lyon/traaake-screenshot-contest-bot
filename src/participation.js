@@ -140,7 +140,7 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
     .select('id', { count: 'exact', head: true })
     .eq('contest_id', contest.id);
 
-  if (count && count % 2 === 0) {
+  if (count && count % 5 === 0) {
     await message.channel.send(
       `🏆 **${count} participants** cette semaine ! Retrouve le classement de la saison sur **[trakr.fr](https://trakr.fr)** 📊`
     );
