@@ -107,43 +107,35 @@ export async function connectBot(env) {
     if (!guildId) return;
     const config = await getGuildConfig(guildId);
     if (!config) return;
+    if (r.message.channelId !== config.guildConfig.contest_channel_id) return;
 
-    if (r.message.channelId === config.guildConfig.contest_channel_id) {
-      // Fetch member to check moderator bypass
-      const guild = r.message.guild;
-      const member = await guild?.members.fetch(user.id).catch(() => null);
-      const isMod = member?.permissions.has('ManageMessages') ?? false;
+    // Interdit : réaction sur un message du bot
+    if (r.message.author?.bot) {
+      await r.users.remove(user.id).catch(() => null);
+      return;
+    }
 
-      if (!isMod) {
-        // Block reactions on past winner photos (closed contests)
-        const { data: closedParticipation } = await supabase
-          .from('participations')
-          .select('id, contests!inner(status)')
-          .eq('message_id', r.message.id)
-          .eq('contests.status', 'closed')
-          .limit(1)
-          .single();
-        if (closedParticipation) {
-          await r.users.remove(user.id).catch(() => null);
-          return;
-        }
+    // Interdit : toute réaction autre que ❤️
+    if (r.emoji.name !== '❤️') {
+      await r.users.remove(user.id).catch(() => null);
+      return;
+    }
 
-        // Only allow ❤️ during active contest
-        const contest = await getActiveContest(config.guildConfig.environment_id);
-        if (contest && r.emoji.name !== '❤️') {
-          await r.users.remove(user.id).catch(() => null);
-          return;
-        }
-
-        if (!contest) return;
-        await handleVoteReaction(r, user, true, guildId, contest);
-        return;
-      }
+    // Interdit : réaction sur une photo d'un concours fermé
+    const { data: closedParticipation } = await supabase
+      .from('participations')
+      .select('id, contests!inner(status)')
+      .eq('message_id', r.message.id)
+      .eq('contests.status', 'closed')
+      .limit(1)
+      .single();
+    if (closedParticipation) {
+      await r.users.remove(user.id).catch(() => null);
+      return;
     }
 
     const contest = await getActiveContest(config.guildConfig.environment_id);
     if (!contest) return;
-
     await handleVoteReaction(r, user, true, guildId, contest);
   });
 

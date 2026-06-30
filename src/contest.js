@@ -244,19 +244,17 @@ export async function closeContest(guild, guildConfig, contest, client) {
       await channel.messages.delete(contest.opening_message_id).catch(() => null);
     }
 
-    // Transformer l'embed d'annonce/règles en embed du gagnant
+    // Transformer l'embed d'annonce/règles en annonce du gagnant (avec mention @everyone)
     if (contest.rules_message_id) {
       const rulesMsg = await channel.messages.fetch(contest.rules_message_id).catch(() => null);
       if (rulesMsg) {
-        await rulesMsg.edit({ content: null, embeds: [embedWinner] }).catch(() => null);
+        await rulesMsg.edit({
+          content: `@everyone 🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** ! Félicitations à <@${winner.participants.discord_user_id}> !`,
+          embeds: [embedWinner],
+          allowedMentions: { parse: ['everyone'] },
+        }).catch(() => null);
       }
     }
-
-    // @everyone ping — nouveau message pour la notification
-    await channel.send({
-      content: `@everyone 🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** ! Félicitations à <@${winner.participants.discord_user_id}> !`,
-      allowedMentions: { parse: ['everyone'] },
-    });
 
     // Delete non-winner participation photos (winner's photo stays below)
     for (const p of participations.slice(1)) {
