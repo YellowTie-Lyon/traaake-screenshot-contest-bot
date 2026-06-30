@@ -53,7 +53,7 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
     const endLabel   = endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const closeTimestamp = Math.floor(endDate.getTime() / 1000);
 
-    await channel.send(`@everyone ✈️ Le concours screenshot de la semaine est **ouvert** ! À vos plus beaux clichés !`);
+    const openMsg = await channel.send(`@everyone ✈️ Le concours screenshot de la semaine est **ouvert** ! À vos plus beaux clichés !`);
 
     const embedAnnonce = new EmbedBuilder()
       .setTitle('📸 Concours Screenshot — Communauté TraaaKe')
@@ -83,7 +83,13 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
       .setColor(0x2b2d31)
       .setFooter({ text: 'Toute infraction peut entraîner une exclusion du concours' });
 
-    await channel.send({ embeds: [embedAnnonce, embedRegles] });
+    const rulesMsg = await channel.send({ embeds: [embedAnnonce, embedRegles] });
+
+    // Store opening message IDs for cleanup at close
+    await supabase.from('contests').update({
+      opening_message_id: openMsg.id,
+      rules_message_id: rulesMsg.id,
+    }).eq('id', contest.id);
   }
 
   await log(guild.id, 'contest_opened', { contestId: contest.id, seasonId: season.id });
@@ -176,6 +182,19 @@ export async function closeContest(guild, guildConfig, contest, client) {
       await log(guild.id, 'contest_tiebreak', { contestId: contest.id, tiedVotes: participations[0].vote_count });
       return { tied: true };
     }
+  }
+
+  // Delete participation messages and opening messages from Discord channel
+  if (channel) {
+    // Delete participation messages
+    for (const p of participations) {
+      if (p.message_id) {
+        await channel.messages.delete(p.message_id).catch(() => null);
+      }
+    }
+    // Delete bot opening messages
+    if (contest.opening_message_id) await channel.messages.delete(contest.opening_message_id).catch(() => null);
+    if (contest.rules_message_id) await channel.messages.delete(contest.rules_message_id).catch(() => null);
   }
 
   // Award points to top 3
