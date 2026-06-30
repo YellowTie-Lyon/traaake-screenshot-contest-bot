@@ -165,7 +165,11 @@ export async function connectBot(env) {
         .eq('contests.status', 'closed')
         .limit(1)
         .single();
-      if (closedParticipation) return;
+      if (closedParticipation) {
+        // Discord ne permet pas de bloquer le retrait — le bot re-ajoute ❤️ pour figer le compteur
+        await r.message.react('❤️').catch(() => null);
+        return;
+      }
     }
 
     const contest = await getActiveContest(config.guildConfig.environment_id);

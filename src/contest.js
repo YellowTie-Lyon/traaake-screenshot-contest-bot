@@ -239,27 +239,24 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name} • Communauté TraaaKe` })
       .setTimestamp();
 
-    // Ping @everyone via a new message (edit ne re-notifie pas Discord)
-    await channel.send({
-      content: `@everyone 🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** !`,
-      allowedMentions: { parse: ['everyone'] },
-    });
-
-    // Edit the opening text message (remove the ouverture ping)
+    // Supprimer le message texte d'ouverture (le @everyone "ouvert")
     if (contest.opening_message_id) {
-      const openMsg = await channel.messages.fetch(contest.opening_message_id).catch(() => null);
-      if (openMsg) {
-        await openMsg.edit(`🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** !`).catch(() => null);
-      }
+      await channel.messages.delete(contest.opening_message_id).catch(() => null);
     }
 
-    // Edit the rules/announce embed message → winner embed
+    // Transformer l'embed d'annonce/règles en embed du gagnant
     if (contest.rules_message_id) {
       const rulesMsg = await channel.messages.fetch(contest.rules_message_id).catch(() => null);
       if (rulesMsg) {
-        await rulesMsg.edit({ embeds: [embedWinner] }).catch(() => null);
+        await rulesMsg.edit({ content: null, embeds: [embedWinner] }).catch(() => null);
       }
     }
+
+    // @everyone ping — nouveau message pour la notification
+    await channel.send({
+      content: `@everyone 🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** ! Félicitations à <@${winner.participants.discord_user_id}> !`,
+      allowedMentions: { parse: ['everyone'] },
+    });
 
     // Delete non-winner participation photos (winner's photo stays below)
     for (const p of participations.slice(1)) {
