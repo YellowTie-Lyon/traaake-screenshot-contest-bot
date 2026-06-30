@@ -228,9 +228,10 @@ export async function closeContest(guild, guildConfig, contest, client) {
     const startLabel = new Date(contest.started_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const endLabel   = new Date(contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    let podium = `🥇 <@${winner.participants.discord_user_id}> — **${winner.vote_count} ❤️**`;
-    if (participations[1]) podium += `\n🥈 <@${participations[1].participants.discord_user_id}> — ${participations[1].vote_count} ❤️`;
-    if (participations[2]) podium += `\n🥉 <@${participations[2].participants.discord_user_id}> — ${participations[2].vote_count} ❤️`;
+    const pts = (i) => PARTICIPATION_POINTS + (POINTS_MAP[i + 1] ?? 0);
+    let podium = `🥇 <@${winner.participants.discord_user_id}> — **${winner.vote_count} ❤️** · +${pts(0)} pts`;
+    if (participations[1]) podium += `\n🥈 <@${participations[1].participants.discord_user_id}> — ${participations[1].vote_count} ❤️ · +${pts(1)} pts`;
+    if (participations[2]) podium += `\n🥉 <@${participations[2].participants.discord_user_id}> — ${participations[2].vote_count} ❤️ · +${pts(2)} pts`;
 
     const embedWinner = new EmbedBuilder()
       .setTitle(`📸 Photographe de la semaine — ${winner.participants.discord_display_name}`)
