@@ -35,7 +35,8 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName('classement')
-    .setDescription('Afficher le classement de l\'année en cours'),
+    .setDescription('Afficher le classement de l\'année en cours')
+    .setDefaultMemberPermissions(null),
 
   new SlashCommandBuilder()
     .setName('syncconfig')
@@ -56,7 +57,8 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName('monstats')
-    .setDescription('Voir tes statistiques de participation au concours screenshot'),
+    .setDescription('Voir tes statistiques de participation au concours screenshot')
+    .setDefaultMemberPermissions(null),
 
   new SlashCommandBuilder()
     .setName('points')
