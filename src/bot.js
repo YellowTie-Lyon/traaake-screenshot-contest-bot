@@ -97,6 +97,22 @@ export async function connectBot(env) {
     if (!guildId) return;
     const config = await getGuildConfig(guildId);
     if (!config) return;
+
+    // Block reactions on past winner photos (closed contests)
+    if (r.message.channelId === config.guildConfig.contest_channel_id) {
+      const { data: closedParticipation } = await supabase
+        .from('participations')
+        .select('id, contests!inner(status)')
+        .eq('message_id', r.message.id)
+        .eq('contests.status', 'closed')
+        .limit(1)
+        .single();
+      if (closedParticipation) {
+        await r.users.remove(user.id).catch(() => null);
+        return;
+      }
+    }
+
     const contest = await getActiveContest(config.guildConfig.environment_id);
     if (!contest) return;
     await handleVoteReaction(r, user, true, guildId, contest);
@@ -110,6 +126,19 @@ export async function connectBot(env) {
     if (!guildId) return;
     const config = await getGuildConfig(guildId);
     if (!config) return;
+
+    // Ignore reaction removal on past winner photos (closed contests)
+    if (r.message.channelId === config.guildConfig.contest_channel_id) {
+      const { data: closedParticipation } = await supabase
+        .from('participations')
+        .select('id, contests!inner(status)')
+        .eq('message_id', r.message.id)
+        .eq('contests.status', 'closed')
+        .limit(1)
+        .single();
+      if (closedParticipation) return;
+    }
+
     const contest = await getActiveContest(config.guildConfig.environment_id);
     if (!contest) return;
     await handleVoteReaction(r, user, false, guildId, contest);
