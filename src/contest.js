@@ -56,7 +56,7 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
     const openMsg = await channel.send(`@everyone ✈️ Le concours screenshot de la semaine est **ouvert** ! À vos plus beaux clichés !`);
 
     const embedAnnonce = new EmbedBuilder()
-      .setTitle('📸 Concours Screenshot — Communauté TraaaKe')
+      .setTitle('📸 Concours Screenshot — Communauté TraKr')
       .setDescription(
         `Postez votre plus beau screenshot sur **Microsoft Flight Simulator 2020 ou 2024** et récoltez le plus de ❤️ !\n` +
         `Le gagnant obtient le rôle **Photographe de la semaine** 🏆`
@@ -68,7 +68,7 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
         { name: '⏳ Temps restant', value: `<t:${closeTimestamp}:R>`, inline: true },
         { name: '🏆 Classement saison', value: '[Voir le classement sur trakr.fr](https://trakr.fr)', inline: false },
       )
-      .setFooter({ text: 'Relancé chaque mercredi à 18h00 • Communauté TraaaKe' });
+      .setFooter({ text: 'Relancé chaque mercredi à 18h00 • Communauté TraKr' });
 
     const embedRegles = new EmbedBuilder()
       .setTitle('📋 Règles du concours')
@@ -112,7 +112,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
         .setTitle('📸 Concours terminé — Aucune participation')
         .setDescription('Personne n\'a participé à ce concours. Rendez-vous mercredi prochain pour le prochain concours !')
         .setColor(0x2b2d31)
-        .setFooter({ text: 'Communauté TraaaKe • trakr.fr' })
+        .setFooter({ text: 'Communauté TraKr • trakr.fr' })
         .setTimestamp();
       await channel.send({ embeds: [embed] });
     }
@@ -256,7 +256,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
         { name: '📅 Semaine du', value: `${startLabel} au ${endLabel}`, inline: true },
         { name: '🏆 Classement saison', value: '[Voir sur trakr.fr](https://trakr.fr)', inline: true },
       )
-      .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name} • Communauté TraaaKe` })
+      .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name} • Communauté TraKr` })
       .setTimestamp();
 
     if (imageUrl) embed.setImage(imageUrl);

@@ -40,11 +40,10 @@ export function stopScheduler() {
 }
 
 export async function checkContests(client) {
-  console.log(`[SCHEDULER] checkContests — guilds: ${client.guilds.cache.size}`);
   for (const guild of client.guilds.cache.values()) {
     try {
       const config = await getGuildConfig(guild.id);
-      if (!config) { console.log(`[SCHEDULER] no config for guild ${guild.id}`); continue; }
+      if (!config) continue;
 
       const { guildConfig, contestSettings } = config;
       const environmentId = guildConfig.environment_id;
@@ -58,8 +57,6 @@ export async function checkContests(client) {
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
-
-      console.log(`[SCHEDULER] contest: ${contest?.id ?? 'none'} | error: ${cErr?.message ?? 'none'}`);
 
       if (!contest) continue;
 
