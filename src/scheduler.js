@@ -1,55 +1,61 @@
 import cron from 'node-cron';
 import { supabase } from './supabase.js';
 import { log } from './logger.js';
-import { getGuildConfig, getActiveContest, loadAllGuildConfigs } from './config.js';
-import { openContest, closeContest } from './contest.js';
+import { getGuildConfig } from './config.js';
+import { closeContest } from './contest.js';
+
+const tasks = [];
 
 export function startScheduler(client) {
-  // Every hour: check for contests that need to open or close
-  cron.schedule('0 * * * *', () => checkContests(client));
-
-  // Every 5 min: sync guild membership
-  cron.schedule('*/5 * * * *', () => syncGuilds(client));
+  // Sync guild last_seen every 5 min
+  tasks.push(cron.schedule('*/5 * * * *', () => syncGuilds(client)));
+  console.log('[SCHEDULER] Started.');
 }
 
-async function checkContests(client) {
+export function stopScheduler() {
+  for (const task of tasks) {
+    if (typeof task.stop === 'function') task.stop();
+    else clearInterval(task);
+  }
+  tasks.length = 0;
+  console.log('[SCHEDULER] Stopped.');
+}
+
+// Called manually via /contest check to force tiebreak resolution check
+export async function checkContests(client) {
   for (const guild of client.guilds.cache.values()) {
     try {
       const config = await getGuildConfig(guild.id);
       if (!config) continue;
 
-      const { guildConfig, contestSettings } = config;
+      const { guildConfig } = config;
       const environmentId = guildConfig.environment_id;
 
-      // Check if there's an active contest that should be closed
-      const active = await getActiveContest(environmentId);
-      if (active) {
-        const endDate = new Date(active.end_date);
-        if (endDate <= new Date()) {
-          await closeContest(guild, guildConfig, active, client);
-        }
-        continue;
-      }
-
-      // Check if a contest should be opened (based on schedule in contest_settings)
-      if (!contestSettings?.is_active) continue;
-
-      const schedule = contestSettings.schedule_cron;
-      if (!schedule) continue;
-
-      // If we're in the cron window, open the contest
-      // We check this by seeing if there's no contest in the last duration_days
-      const since = new Date(Date.now() - (contestSettings.duration_days ?? 7) * 86400000);
-      const { data: recent } = await supabase
+      const { data: contest } = await supabase
         .from('contests')
-        .select('id')
+        .select('*')
         .eq('environment_id', environmentId)
-        .gte('created_at', since.toISOString())
-        .limit(1);
+        .eq('status', 'tiebreak')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      if (!recent || recent.length === 0) {
-        await openContest(guild, guildConfig, contestSettings, client);
-      }
+      if (!contest) continue;
+
+      // Check if tiebreak is resolved
+      const { data: top2 } = await supabase
+        .from('participations')
+        .select('id, vote_count')
+        .eq('contest_id', contest.id)
+        .order('vote_count', { ascending: false })
+        .limit(2);
+
+      const stillTied = top2?.length >= 2 && top2[0].vote_count === top2[1].vote_count;
+      if (stillTied) continue;
+
+      // Tie resolved → close now
+      await closeContest(guild, guildConfig, contest, client);
+
     } catch (err) {
       await log(guild.id, 'scheduler_error', { error: err.message }, 'error');
     }

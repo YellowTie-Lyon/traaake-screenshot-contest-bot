@@ -15,6 +15,7 @@ export async function refreshGuildConfig(guildId) {
     .from('discord_guild_configs')
     .select('*, environments(*)')
     .eq('guild_id', guildId)
+    .eq('environment_id', process.env.ENVIRONMENT_ID)
     .single();
 
   if (error || !guildConfig) {
@@ -61,7 +62,7 @@ export async function getActiveContest(environmentId) {
     .from('contests')
     .select('*, seasons(*)')
     .eq('environment_id', environmentId)
-    .eq('status', 'active')
+    .in('status', ['active', 'tiebreak'])
     .order('created_at', { ascending: false })
     .limit(1)
     .single();
