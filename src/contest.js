@@ -334,23 +334,36 @@ async function updatePhotographerRole(guild, guildConfig, contest, winnerPartici
 }
 
 async function getActiveSeason() {
+  const currentYear = new Date().getFullYear();
+
   const { data } = await supabase
     .from('seasons')
     .select('*')
     .eq('is_active', true)
     .single();
-  return data ?? null;
+
+  if (!data) return null;
+
+  // If the active season is from a previous year, close it and start fresh
+  if (new Date(data.starts_at).getFullYear() < currentYear) {
+    await supabase.from('seasons').update({ is_active: false }).eq('id', data.id);
+    return null;
+  }
+
+  return data;
 }
 
 async function createSeason() {
   const now = new Date();
-  const end = new Date(now.getFullYear(), now.getMonth() + 3, 1);
+  const year = now.getFullYear();
+  const start = new Date(year, 0, 1);       // 1er janvier
+  const end   = new Date(year, 11, 31, 23, 59, 59); // 31 décembre
 
   const { data, error } = await supabase
     .from('seasons')
     .insert({
-      name: `Saison ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-      starts_at: now.toISOString(),
+      name: String(year),
+      starts_at: start.toISOString(),
       ends_at: end.toISOString(),
       is_active: true,
     })
