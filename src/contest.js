@@ -2,7 +2,8 @@ import { supabase } from './supabase.js';
 import { log } from './logger.js';
 import { EmbedBuilder } from 'discord.js';
 
-const POINTS_MAP = { 1: 100, 2: 75, 3: 50 };
+const POINTS_MAP = { 1: 100, 2: 60, 3: 30 };
+const PARTICIPATION_POINTS = 20;
 const VOTE_EMOJI = '❤️';
 
 function nextWednesdayAt18() {
@@ -201,17 +202,19 @@ export async function closeContest(guild, guildConfig, contest, client) {
     closed_at: new Date().toISOString(),
   }).eq('id', contest.id);
 
-  // Award points to top 3
-  for (let i = 0; i < Math.min(3, participations.length); i++) {
+  // Award points — participation (everyone) + podium bonus (top 3)
+  for (let i = 0; i < participations.length; i++) {
     const participation = participations[i];
-    const points = POINTS_MAP[i + 1] ?? 0;
-    if (points === 0) continue;
+    const podiumBonus = POINTS_MAP[i + 1] ?? 0;
+    const total = PARTICIPATION_POINTS + podiumBonus;
 
     await supabase.from('points_ledger').insert({
       participant_id: participation.participant_id,
       season_id: contest.season_id,
-      points,
-      reason: `Concours #${contest.id} — place ${i + 1}`,
+      points: total,
+      reason: podiumBonus > 0
+        ? `Concours #${contest.id} — place ${i + 1} (+${podiumBonus} bonus)`
+        : `Concours #${contest.id} — participation`,
       contest_id: contest.id,
     });
   }
