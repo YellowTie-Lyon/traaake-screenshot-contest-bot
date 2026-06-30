@@ -5,6 +5,27 @@ import { log } from '../logger.js';
 import { supabase } from '../supabase.js';
 import { checkContests } from '../scheduler.js';
 
+// Rate limiting: max 2 uses per user per 30s for public commands
+const rateLimitMap = new Map();
+const RATE_LIMIT_COMMANDS = new Set(['classement', 'monstats']);
+const RATE_LIMIT_MAX = 2;
+const RATE_LIMIT_WINDOW = 30_000;
+
+function isRateLimited(userId, command) {
+  if (!RATE_LIMIT_COMMANDS.has(command)) return false;
+  const key = `${userId}:${command}`;
+  const now = Date.now();
+  const entry = rateLimitMap.get(key) ?? { count: 0, resetAt: now + RATE_LIMIT_WINDOW };
+  if (now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return false;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return true;
+  entry.count++;
+  rateLimitMap.set(key, entry);
+  return false;
+}
+
 export async function handleInteraction(interaction, client) {
   if (!interaction.isChatInputCommand()) return;
 
@@ -17,6 +38,12 @@ export async function handleInteraction(interaction, client) {
   }
 
   const { guildConfig, contestSettings } = config;
+
+  // Rate limiting for public commands
+  if (isRateLimited(interaction.user.id, interaction.commandName)) {
+    await interaction.reply({ content: '⏳ Tu utilises cette commande trop souvent. Réessaie dans quelques secondes.', ephemeral: true });
+    return;
+  }
 
   // Check admin role for management commands
   const isAdmin = interaction.member.roles.cache.has(guildConfig.admin_role_id)
@@ -260,7 +287,7 @@ async function handleBan(interaction, guildConfig, isAdmin) {
   }
 
   const target = interaction.options.getUser('membre');
-  const reason = interaction.options.getString('raison') ?? null;
+  const reason = (interaction.options.getString('raison') ?? '').slice(0, 256) || null;
   const dureeStr = interaction.options.getString('durée') ?? null;
   const expiresAt = parseDuration(dureeStr);
 
