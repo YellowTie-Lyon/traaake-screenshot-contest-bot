@@ -245,18 +245,22 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setTimestamp();
 
     // Supprimer le message texte d'ouverture et le message d'égalité s'il existe
-    // Supprimer tous les messages du bot dans le salon sauf l'embed gagnant (rules_message_id)
+    // Supprimer les messages du bot postés depuis l'ouverture du concours, sauf l'embed gagnant
     const keepId = contest.rules_message_id;
+    const contestStart = new Date(contest.started_at);
     let lastId;
     while (true) {
       const batch = await channel.messages.fetch({ limit: 100, ...(lastId ? { before: lastId } : {}) });
       if (batch.size === 0) break;
       for (const msg of batch.values()) {
+        if (new Date(msg.createdAt) < contestStart) continue;
         if (msg.author.id === channel.client.user.id && msg.id !== keepId) {
           await msg.delete().catch(() => null);
         }
       }
-      lastId = batch.last()?.id;
+      const oldest = batch.last();
+      if (!oldest || new Date(oldest.createdAt) < contestStart) break;
+      lastId = oldest.id;
       if (batch.size < 100) break;
     }
 
