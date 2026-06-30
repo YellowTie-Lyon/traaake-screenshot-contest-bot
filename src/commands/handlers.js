@@ -343,6 +343,14 @@ async function handleBan(interaction, guildConfig, isAdmin) {
     ? `jusqu'au <t:${Math.floor(expiresAt.getTime() / 1000)}:F>`
     : 'définitivement';
 
+  try {
+    const dm = await target.createDM();
+    await dm.send(
+      `🚫 **Tu es exclu du concours screenshot** ${expiry}.\n` +
+      (reason ? `**Raison :** ${reason}` : '')
+    );
+  } catch { /* DMs may be closed */ }
+
   await interaction.reply({
     content: `🚫 **${target.username}** est exclu du concours ${expiry}${reason ? ` — *${reason}*` : ''}${participationRemoved ? '\n🗑️ Sa participation en cours a été supprimée.' : ''}.`,
     ephemeral: true,
