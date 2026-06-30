@@ -85,7 +85,14 @@ export async function connectBot(env) {
     if (!config) return;
     if (message.channelId !== config.guildConfig.contest_channel_id) return;
     const contest = await getActiveContest(config.guildConfig.environment_id);
-    if (!contest) return;
+    if (!contest) {
+      // No active contest → delete the message and notify the user
+      await message.delete().catch(() => null);
+      await message.author.send(
+        `❌ Le salon **#${message.channel?.name ?? 'concours'}** est réservé au concours screenshot.\nAucun concours n'est ouvert pour le moment.`
+      ).catch(() => null);
+      return;
+    }
     await handleScreenshotMessage(message, config.guildConfig, contest);
   });
 
@@ -115,6 +122,13 @@ export async function connectBot(env) {
 
     const contest = await getActiveContest(config.guildConfig.environment_id);
     if (!contest) return;
+
+    // Only allow ❤️ on participation messages during active contest
+    if (r.message.channelId === config.guildConfig.contest_channel_id && r.emoji.name !== '❤️') {
+      await r.users.remove(user.id).catch(() => null);
+      return;
+    }
+
     await handleVoteReaction(r, user, true, guildId, contest);
   });
 
