@@ -249,9 +249,8 @@ export async function closeContest(guild, guildConfig, contest, client) {
       const rulesMsg = await channel.messages.fetch(contest.rules_message_id).catch(() => null);
       if (rulesMsg) {
         await rulesMsg.edit({
-          content: `@everyone 🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** ! Félicitations à <@${winner.participants.discord_user_id}> !`,
+          content: `🏆 Le concours screenshot de la semaine du **${startLabel}** au **${endLabel}** est **terminé** ! Félicitations à <@${winner.participants.discord_user_id}> !`,
           embeds: [embedWinner],
-          allowedMentions: { parse: ['everyone'] },
         }).catch(() => null);
       }
     }
