@@ -25,6 +25,7 @@ export const commands = [
         .addStringOption(opt => opt.setName('raison').setDescription('Raison du ban').setRequired(false))
         .addStringOption(opt => opt.setName('durée').setDescription('Durée du ban (vide = permanent)').setRequired(false)
           .addChoices(
+            { name: '1 minute (test)', value: '1m' },
             { name: '1 jour', value: '1j' },
             { name: '3 jours', value: '3j' },
             { name: '7 jours', value: '7j' },

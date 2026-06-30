@@ -276,11 +276,11 @@ async function handleReset(interaction, guildConfig, isAdmin) {
 
 function parseDuration(str) {
   if (!str || str === 'permanent') return null;
-  const match = str.match(/^(\d+)(j|d|h)$/i);
+  const match = str.match(/^(\d+)(j|d|h|m)$/i);
   if (!match) return null;
   const amount = parseInt(match[1]);
   const unit = match[2].toLowerCase();
-  const ms = unit === 'h' ? amount * 3600000 : amount * 86400000;
+  const ms = unit === 'h' ? amount * 3600000 : unit === 'm' ? amount * 60000 : amount * 86400000;
   return new Date(Date.now() + ms);
 }
 
