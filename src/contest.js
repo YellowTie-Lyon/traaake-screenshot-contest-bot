@@ -217,6 +217,20 @@ export async function closeContest(guild, guildConfig, contest, client) {
         : `Concours #${contest.id} — participation`,
       contest_id: contest.id,
     });
+
+    // Increment participation_count for all, win_count only for winner
+    const { data: currentStats } = await supabase
+      .from('participants')
+      .select('participation_count, win_count')
+      .eq('id', participation.participant_id)
+      .single();
+
+    if (currentStats) {
+      await supabase.from('participants').update({
+        participation_count: currentStats.participation_count + 1,
+        ...(i === 0 ? { win_count: currentStats.win_count + 1 } : {}),
+      }).eq('id', participation.participant_id);
+    }
   }
 
   // Assign/remove "Photographe de la semaine" role
@@ -274,6 +288,18 @@ export async function closeContest(guild, guildConfig, contest, client) {
         }).catch(() => null);
       }
     }
+
+    // DM the winner
+    try {
+      const winnerUser = await channel.client.users.fetch(winner.participants.discord_user_id);
+      const dm = await winnerUser.createDM();
+      await dm.send(
+        `🏆 **Félicitations ${winner.participants.discord_display_name} !**\n\n` +
+        `Tu remportes le concours screenshot de la semaine avec **${winner.vote_count} ❤️** !\n` +
+        `Tu reçois le rôle **Photographe de la semaine** et **${PARTICIPATION_POINTS + (POINTS_MAP[1] ?? 0)} points** au classement.\n\n` +
+        `📊 Retrouve le classement complet sur **https://trakr.fr**`
+      );
+    } catch { /* DMs may be closed */ }
 
     // Delete non-winner participation photos (winner's photo stays below)
     for (const p of participations.slice(1)) {

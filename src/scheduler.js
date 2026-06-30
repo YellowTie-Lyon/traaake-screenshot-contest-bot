@@ -9,6 +9,8 @@ const tasks = [];
 export function startScheduler(client) {
   // Sync guild last_seen every 5 min
   tasks.push(cron.schedule('*/5 * * * *', () => syncGuilds(client)));
+  // Reminder every Monday at 18:00
+  tasks.push(cron.schedule('0 18 * * 1', () => sendContestReminder(client)));
   console.log('[SCHEDULER] Started.');
 }
 
@@ -58,6 +60,37 @@ export async function checkContests(client) {
 
     } catch (err) {
       await log(guild.id, 'scheduler_error', { error: err.message }, 'error');
+    }
+  }
+}
+
+async function sendContestReminder(client) {
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const config = await getGuildConfig(guild.id);
+      if (!config) continue;
+      const { guildConfig } = config;
+
+      const { data: contest } = await supabase
+        .from('contests')
+        .select('ends_at')
+        .eq('environment_id', guildConfig.environment_id)
+        .in('status', ['active', 'tiebreak'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!contest) continue;
+
+      const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
+      if (!channel) continue;
+
+      const closeTimestamp = Math.floor(new Date(contest.ends_at).getTime() / 1000);
+      await channel.send(
+        `⏰ **Rappel** — Le concours screenshot se termine <t:${closeTimestamp}:R> ! Plus que quelques heures pour voter et participer 📸`
+      );
+    } catch (err) {
+      await log(guild.id, 'reminder_error', { error: err.message }, 'error');
     }
   }
 }
