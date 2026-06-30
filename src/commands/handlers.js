@@ -308,15 +308,46 @@ async function handleBan(interaction, guildConfig, isAdmin) {
     { onConflict: 'environment_id,discord_user_id' }
   );
 
+  // Remove active participation if a contest is currently running
+  const activeContest = await getActiveContest(guildConfig.environment_id);
+  let participationRemoved = false;
+  if (activeContest) {
+    const { data: participant } = await supabase
+      .from('participants')
+      .select('id')
+      .eq('discord_user_id', target.id)
+      .single();
+
+    if (participant) {
+      const { data: participation } = await supabase
+        .from('participations')
+        .select('id, message_id')
+        .eq('participant_id', participant.id)
+        .eq('contest_id', activeContest.id)
+        .single();
+
+      if (participation) {
+        // Delete the message from Discord
+        const channel = interaction.guild.channels.cache.get(guildConfig.contest_channel_id);
+        if (channel && participation.message_id) {
+          await channel.messages.delete(participation.message_id).catch(() => null);
+        }
+        // Delete from DB
+        await supabase.from('participations').delete().eq('id', participation.id);
+        participationRemoved = true;
+      }
+    }
+  }
+
   const expiry = expiresAt
     ? `jusqu'au <t:${Math.floor(expiresAt.getTime() / 1000)}:F>`
     : 'définitivement';
 
   await interaction.reply({
-    content: `🚫 **${target.username}** est exclu du concours ${expiry}${reason ? ` — *${reason}*` : ''}.`,
+    content: `🚫 **${target.username}** est exclu du concours ${expiry}${reason ? ` — *${reason}*` : ''}${participationRemoved ? '\n🗑️ Sa participation en cours a été supprimée.' : ''}.`,
     ephemeral: true,
   });
-  await log(guildConfig.guild_id, 'contest_ban', { targetId: target.id, reason, expiresAt, bannedBy: interaction.user.id });
+  await log(guildConfig.guild_id, 'contest_ban', { targetId: target.id, reason, expiresAt, bannedBy: interaction.user.id, participationRemoved });
 }
 
 async function handleUnban(interaction, guildConfig, isAdmin) {
