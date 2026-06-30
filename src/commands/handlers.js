@@ -170,7 +170,7 @@ async function handleLeaderboard(interaction, guildConfig) {
       sorted.map((e, i) => `${medals[i] ?? `${i + 1}.`} **${e.username}** — ${e.points} pts`).join('\n')
     )
     .addFields({ name: '📊 Classement complet', value: '[Voir le classement complet sur trakr.fr](https://trakr.fr)', inline: false })
-    .setFooter({ text: 'Classement mis à jour en temps réel' })
+    .setFooter({ text: 'Classement mis à jour en temps réel • /monstats pour voir tes statistiques personnelles' })
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
