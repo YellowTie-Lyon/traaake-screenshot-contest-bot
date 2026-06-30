@@ -148,7 +148,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
       // Replace top of sorted list with the tiebreak winner (first submitted)
       if (tiedParticipations?.length >= 2) {
         const winner = tiedParticipations[0];
-        const loser = tiedParticipations[1];
+        const others = tiedParticipations.slice(1).map(p => `<@${p.participants.discord_user_id}>`).join(', ');
         // Reorder so winner is first
         const idx = participations.findIndex(p => p.id === winner.id);
         if (idx > 0) {
@@ -160,7 +160,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
           const embed = new EmbedBuilder()
             .setTitle('⚖️ Égalité persistante — départage par ancienneté')
             .setDescription(
-              `<@${winner.participants.discord_user_id}> et <@${loser.participants.discord_user_id}> sont toujours à égalité avec **${winner.vote_count} ❤️**.\n\n` +
+              `<@${winner.participants.discord_user_id}> et ${others} sont toujours à égalité avec **${winner.vote_count} ❤️**.\n\n` +
               `🏆 **<@${winner.participants.discord_user_id}> remporte le concours** car sa photo a été postée en premier !`
             )
             .setColor(0xff9900)
@@ -177,10 +177,15 @@ export async function closeContest(guild, guildConfig, contest, client) {
       await supabase.from('contests').update({ ends_at: newEnd.toISOString(), status: 'tiebreak' }).eq('id', contest.id);
 
       if (channel) {
+        // List ALL tied participants (same vote_count as top)
+        const topVotes = participations[0].vote_count;
+        const tiedAll = participations.filter(p => p.vote_count === topVotes);
+        const tiedMentions = tiedAll.map(p => `<@${p.participants.discord_user_id}>`).join(', ');
+
         const embed = new EmbedBuilder()
           .setTitle('⚖️ Égalité ! Le concours est prolongé.')
           .setDescription(
-            `<@${participations[0].participants.discord_user_id}> et <@${participations[1].participants.discord_user_id}> sont à égalité avec **${participations[0].vote_count} ❤️**.\n\n` +
+            `${tiedMentions} sont à égalité avec **${topVotes} ❤️**.\n\n` +
             `Le concours est prolongé de **24h**. Votez pour départager ! Le concours se termine <t:${Math.floor(newEnd.getTime() / 1000)}:R>.`
           )
           .setColor(0xff9900)
