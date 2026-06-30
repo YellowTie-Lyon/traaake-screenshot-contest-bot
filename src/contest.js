@@ -229,6 +229,19 @@ export async function closeContest(guild, guildConfig, contest, client) {
     const startLabel = new Date(contest.started_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const endLabel   = new Date(contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
+    // Fetch fresh image URL from Discord message (CDN URLs expire)
+    let imageUrl = null;
+    if (winner.message_id) {
+      try {
+        const msg = await channel.messages.fetch(winner.message_id).catch(() => null);
+        if (msg) {
+          const attachment = msg.attachments.find(a => a.contentType?.startsWith('image/'));
+          imageUrl = attachment?.url ?? msg.embeds.find(e => e.image)?.image?.url ?? null;
+        }
+      } catch { /* message already deleted, fall back to stored url */ }
+    }
+    if (!imageUrl) imageUrl = winner.image_url;
+
     await channel.send(`@everyone 🏆 Le concours screenshot de la semaine est **terminé** ! Voici les résultats !`);
 
     let podium = `🥇 <@${winner.participants.discord_user_id}> — **${winner.vote_count} ❤️**`;
@@ -246,7 +259,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name} • Communauté TraaaKe` })
       .setTimestamp();
 
-    if (winner.image_url) embed.setImage(winner.image_url);
+    if (imageUrl) embed.setImage(imageUrl);
     await channel.send({ embeds: [embed] });
   }
 
