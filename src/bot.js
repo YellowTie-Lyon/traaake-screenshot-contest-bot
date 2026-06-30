@@ -5,7 +5,7 @@ import {
   Events,
 } from 'discord.js';
 import { supabase } from './supabase.js';
-import { log } from './logger.js';
+import { log, setLogClient } from './logger.js';
 import { loadAllGuildConfigs, getGuildConfig, getActiveContest, refreshGuildConfig } from './config.js';
 import { handleScreenshotMessage, handleVoteReaction } from './participation.js';
 import { handleInteraction } from './commands/handlers.js';
@@ -53,6 +53,7 @@ export async function connectBot(env) {
         .eq('guild_id', guild.id);
     }
 
+    setLogClient(client);
     await resyncVotes(client);
     startScheduler(client);
     watchContestChanges(client, env);
