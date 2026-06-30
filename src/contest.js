@@ -97,6 +97,11 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
 }
 
 export async function closeContest(guild, guildConfig, contest, client) {
+  // Guard against double-close (scheduler + manual)
+  const { data: freshContest } = await supabase
+    .from('contests').select('status').eq('id', contest.id).single();
+  if (!freshContest || freshContest.status === 'closed') return { tied: false };
+
   const { data: participations } = await supabase
     .from('participations')
     .select('*, participants(*)')
@@ -184,15 +189,24 @@ export async function closeContest(guild, guildConfig, contest, client) {
     }
   }
 
+  // Fetch winner image URL BEFORE deleting messages
+  let imageUrl = null;
+  if (channel && participations[0].message_id) {
+    try {
+      const msg = await channel.messages.fetch(participations[0].message_id).catch(() => null);
+      if (msg) {
+        const attachment = msg.attachments.find(a => a.contentType?.startsWith('image/'));
+        imageUrl = attachment?.url ?? msg.embeds.find(e => e.image)?.image?.url ?? null;
+      }
+    } catch { /* fall back to stored url */ }
+    if (!imageUrl) imageUrl = participations[0].image_url;
+  }
+
   // Delete participation messages and opening messages from Discord channel
   if (channel) {
-    // Delete participation messages
     for (const p of participations) {
-      if (p.message_id) {
-        await channel.messages.delete(p.message_id).catch(() => null);
-      }
+      if (p.message_id) await channel.messages.delete(p.message_id).catch(() => null);
     }
-    // Delete bot opening messages
     if (contest.opening_message_id) await channel.messages.delete(contest.opening_message_id).catch(() => null);
     if (contest.rules_message_id) await channel.messages.delete(contest.rules_message_id).catch(() => null);
   }
@@ -228,19 +242,6 @@ export async function closeContest(guild, guildConfig, contest, client) {
     const winner = participations[0];
     const startLabel = new Date(contest.started_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const endLabel   = new Date(contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-    // Fetch fresh image URL from Discord message (CDN URLs expire)
-    let imageUrl = null;
-    if (winner.message_id) {
-      try {
-        const msg = await channel.messages.fetch(winner.message_id).catch(() => null);
-        if (msg) {
-          const attachment = msg.attachments.find(a => a.contentType?.startsWith('image/'));
-          imageUrl = attachment?.url ?? msg.embeds.find(e => e.image)?.image?.url ?? null;
-        }
-      } catch { /* message already deleted, fall back to stored url */ }
-    }
-    if (!imageUrl) imageUrl = winner.image_url;
 
     await channel.send(`@everyone 🏆 Le concours screenshot de la semaine est **terminé** ! Voici les résultats !`);
 
