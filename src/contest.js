@@ -245,11 +245,13 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setTimestamp();
 
     // Supprimer le message texte d'ouverture et le message d'égalité s'il existe
-    if (contest.opening_message_id) {
-      await channel.messages.delete(contest.opening_message_id).catch(() => null);
-    }
-    if (contest.tiebreak_message_id) {
-      await channel.messages.delete(contest.tiebreak_message_id).catch(() => null);
+    // Supprimer tous les messages du bot dans le salon sauf l'embed gagnant (rules_message_id)
+    const botMessages = await channel.messages.fetch({ limit: 100 });
+    const keepId = contest.rules_message_id;
+    for (const msg of botMessages.values()) {
+      if (msg.author.id === channel.client.user.id && msg.id !== keepId) {
+        await msg.delete().catch(() => null);
+      }
     }
 
     // Transformer l'embed d'annonce/règles en annonce du gagnant (avec mention @everyone)
