@@ -134,6 +134,19 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
   // Add ❤️ reaction as the vote emoji
   await message.react(VOTE_EMOJI);
 
+  // Every 2 participations, send a short promo message pointing to the leaderboard
+  const { count } = await supabase
+    .from('participations')
+    .select('id', { count: 'exact', head: true })
+    .eq('contest_id', contest.id);
+
+  if (count && count % 2 === 0) {
+    const promoMsg = await message.channel.send(
+      `🏆 **${count} participants** cette semaine ! Retrouve le classement de la saison sur **[trakr.fr](https://trakr.fr)** 📊`
+    );
+    setTimeout(() => promoMsg.delete().catch(() => null), 15_000);
+  }
+
   await log(guildId, 'participation_submitted', {
     discordUserId,
     username: message.author.username,

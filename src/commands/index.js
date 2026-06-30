@@ -34,8 +34,8 @@ export const commands = [
     ),
 
   new SlashCommandBuilder()
-    .setName('leaderboard')
-    .setDescription('Afficher le classement de la saison'),
+    .setName('classement')
+    .setDescription('Afficher le classement de l\'année en cours'),
 
   new SlashCommandBuilder()
     .setName('syncconfig')

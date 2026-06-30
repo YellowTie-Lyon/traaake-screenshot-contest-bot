@@ -26,7 +26,7 @@ export async function handleInteraction(interaction, client) {
     case 'contest':
       await handleContestCommand(interaction, guildConfig, contestSettings, isAdmin, client);
       break;
-    case 'leaderboard':
+    case 'classement':
       await handleLeaderboard(interaction, guildConfig);
       break;
     case 'syncconfig':
@@ -171,6 +171,8 @@ async function handleLeaderboard(interaction, guildConfig) {
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
+  const reply = await interaction.fetchReply().catch(() => null);
+  if (reply) setTimeout(() => reply.delete().catch(() => null), 10_000);
 }
 
 async function handleReset(interaction, guildConfig, isAdmin) {
