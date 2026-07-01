@@ -91,6 +91,11 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
     console.log(`[BOT] Message envoyé — ouverture du concours`);
     const openMsg = await channel.send({ content: `@everyone ✈️ Le concours screenshot de la semaine est **ouvert** ! À vos plus beaux clichés !`, allowedMentions: { parse: ['everyone'] } });
 
+    const pts1st = contestSettings?.points_1st ?? 100;
+    const pts2nd = contestSettings?.points_2nd ?? 60;
+    const pts3rd = contestSettings?.points_3rd ?? 30;
+    const ptsParticipation = getParticipationPoints(contestSettings);
+
     const embedAnnonce = new EmbedBuilder()
       .setTitle('📸 Concours Screenshot — Communauté TraaaKe')
       .setDescription(
@@ -103,7 +108,12 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
         { name: '📅 Ouverture', value: startLabel, inline: true },
         { name: '🏁 Fermeture', value: endLabel, inline: true },
         { name: '⏳ Temps restant', value: `<t:${closeTimestamp}:R>`, inline: true },
-        { name: '🏆 Classement', value: '[Voir le classement sur traaake.fr](https://traaake.fr/)', inline: false },
+        {
+          name: '🏆 Système de points',
+          value: `🥇 1ère place · **+${pts1st} pts**\n🥈 2ème place · **+${pts2nd} pts**\n🥉 3ème place · **+${pts3rd} pts**\n📸 Participation · **+${ptsParticipation} pts**`,
+          inline: false,
+        },
+        { name: '📊 Classement', value: '[Voir le classement sur traaake.fr](https://traaake.fr/)', inline: false },
       )
       .setFooter({ text: 'Fermeture mercredi à 17h58 • Relance à 18h00 • Communauté TraaaKe' });
 
