@@ -68,7 +68,7 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
         { name: '📅 Ouverture', value: startLabel, inline: true },
         { name: '🏁 Fermeture', value: endLabel, inline: true },
         { name: '⏳ Temps restant', value: `<t:${closeTimestamp}:R>`, inline: true },
-        { name: '🏆 Classement', value: '[Voir le classement sur trake.fr](https://trake.fr/)', inline: false },
+        { name: '🏆 Classement', value: '[Voir le classement sur traaake.fr](https://traaake.fr/)', inline: false },
       )
       .setFooter({ text: 'Relancé chaque mercredi à 18h00 • Communauté TraaaKe' });
 
@@ -119,7 +119,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
         .setTitle('📸 Concours terminé — Aucune participation')
         .setDescription('Personne n\'a participé à ce concours. Rendez-vous mercredi prochain pour le prochain concours !')
         .setColor(0x2b2d31)
-        .setFooter({ text: 'Communauté TraaaKe • trake.fr' })
+        .setFooter({ text: 'Communauté TraaaKe • traaake.fr' })
         .setTimestamp();
 
       // Edit opening messages in place
@@ -264,7 +264,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setColor(0xffd700)
       .addFields(
         { name: '📅 Semaine du', value: `${startLabel} au ${endLabel}`, inline: true },
-        { name: '🏆 Classement', value: '[Voir sur trake.fr](https://trake.fr/)', inline: true },
+        { name: '🏆 Classement', value: '[Voir sur traaake.fr](https://traaake.fr/)', inline: true },
       )
       .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name}` })
       .setTimestamp();
@@ -308,7 +308,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
         `🏆 **Félicitations ${winner.participants.discord_display_name} !**\n\n` +
         `Tu remportes le concours screenshot de la semaine avec **${winner.vote_count} ❤️** !\n` +
         `Tu reçois le rôle **Photographe de la semaine** et **${PARTICIPATION_POINTS + (POINTS_MAP[1] ?? 0)} points** au classement.\n\n` +
-        `📊 Retrouve le classement complet sur **https://trake.fr/**`
+        `📊 Retrouve le classement complet sur **https://traaake.fr/**`
       );
     } catch { /* DMs may be closed */ }
 

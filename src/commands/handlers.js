@@ -200,7 +200,7 @@ async function handleLeaderboard(interaction, guildConfig) {
     .setDescription(
       sorted.map((e, i) => `${medals[i] ?? `${i + 1}.`} **${e.username}** — ${e.points} pts`).join('\n')
     )
-    .addFields({ name: '📊 Classement complet', value: '[Voir le classement complet sur trake.fr](https://trake.fr/)', inline: false })
+    .addFields({ name: '📊 Classement complet', value: '[Voir le classement complet sur traaake.fr](https://traaake.fr/)', inline: false })
     .setFooter({ text: 'Classement mis à jour en temps réel • /monstats pour voir tes statistiques personnelles' })
     .setTimestamp();
 
@@ -514,7 +514,7 @@ async function handleMonStats(interaction, guildConfig) {
       { name: `✨ Points ${season?.name ?? 'saison'}`, value: String(seasonPoints), inline: true },
       { name: '❤️ Meilleur score', value: best ? `${best.vote_count} votes` : 'N/A', inline: true },
     )
-    .addFields({ name: '📊 Classement complet', value: '[Voir sur trake.fr](https://trake.fr/)', inline: false })
+    .addFields({ name: '📊 Classement complet', value: '[Voir sur traaake.fr](https://traaake.fr/)', inline: false })
     .setFooter({ text: 'Statistiques mises à jour en temps réel' })
     .setTimestamp();
 

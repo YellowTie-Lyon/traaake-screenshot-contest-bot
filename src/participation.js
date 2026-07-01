@@ -170,7 +170,7 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
 
   if (count && count % 5 === 0) {
     await message.channel.send(
-      `🏆 **${count} participants** cette semaine ! Retrouve le classement de la saison sur **[trake.fr](https://trake.fr/)** 📊`
+      `🏆 **${count} participants** cette semaine ! Retrouve le classement de la saison sur **[traaake.fr](https://traaake.fr/)** 📊`
     );
   }
 
