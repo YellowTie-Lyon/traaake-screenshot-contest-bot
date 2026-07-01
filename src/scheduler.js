@@ -175,9 +175,10 @@ async function sendContestReminder(client) {
 
       // Regular reminder
       const closeTimestamp = Math.floor(endsAt.getTime() / 1000);
-      await channel.send(
-        `⏰ **Rappel** — Le concours screenshot se termine <t:${closeTimestamp}:R> ! Plus que quelques heures pour voter et participer 📸`
-      );
+      await channel.send({
+        content: `@everyone ⏰ **Rappel** — Le concours screenshot se termine <t:${closeTimestamp}:R> ! Plus que quelques heures pour voter et participer 📸`,
+        allowedMentions: { parse: ['everyone'] },
+      });
     } catch (err) {
       await log(guild.id, 'reminder_error', { error: err.message }, 'error');
     }
