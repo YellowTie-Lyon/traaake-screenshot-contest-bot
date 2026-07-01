@@ -266,11 +266,24 @@ async function handleReset(interaction, guildConfig, isAdmin) {
     }
   }
 
-  // Delete points, participations and reset winner data for all contests
+  // Fetch active season only
+  const { data: activeSeason } = await supabase
+    .from('seasons')
+    .select('id, name')
+    .eq('is_active', true)
+    .single();
+
+  if (!activeSeason) {
+    await interaction.editReply('❌ Aucune saison active trouvée — reset annulé.');
+    return;
+  }
+
+  // Only touch contests from the active season
   const { data: contests } = await supabase
     .from('contests')
     .select('id')
-    .eq('environment_id', environmentId);
+    .eq('environment_id', environmentId)
+    .eq('season_id', activeSeason.id);
 
   if (contests?.length) {
     const contestIds = contests.map(c => c.id);
@@ -280,22 +293,16 @@ async function handleReset(interaction, guildConfig, isAdmin) {
       .in('id', contestIds);
     await supabase.from('points_ledger').delete().in('contest_id', contestIds);
     await supabase.from('participations').delete().in('contest_id', contestIds);
+    await supabase.from('contests').delete().in('id', contestIds);
   }
 
-  // Delete all remaining points_ledger entries (historical imports without contest_id)
-  await supabase.from('points_ledger').delete().is('contest_id', null);
+  // Reset win_count and participation_count on all participants
+  await supabase.from('participants')
+    .update({ win_count: 0, participation_count: 0 })
+    .neq('id', '00000000-0000-0000-0000-000000000000');
 
-  // Delete participants
-  await supabase.from('participants').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-  // Close active contest if any
-  await supabase.from('contests')
-    .update({ status: 'closed', closed_at: new Date().toISOString() })
-    .eq('environment_id', environmentId)
-    .in('status', ['active', 'tiebreak']);
-
-  await log(guildConfig.guild_id, 'leaderboard_reset', { triggeredBy: interaction.user.id });
-  await interaction.editReply('✅ Classement remis à zéro — points, participations, membres, votes et gagnants supprimés.');
+  await log(guildConfig.guild_id, 'leaderboard_reset', { triggeredBy: interaction.user.id, season: activeSeason.name });
+  await interaction.editReply(`✅ Classement **${activeSeason.name}** remis à zéro — participations, votes et gagnants de la saison supprimés. Les années précédentes sont conservées.`);
 }
 
 function parseDuration(str) {
