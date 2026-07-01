@@ -106,6 +106,7 @@ async function testModeTickClose(client) {
           await channel.send(`⚠️ **Le concours screenshot ferme** <t:${Math.floor(endsAt.getTime() / 1000)}:R> ! Dernière chance pour voter et participer 📸`);
         }
         await supabase.from('contests').update({ warning_sent: true }).eq('id', contest.id);
+        await log(guild.id, 'contest_warning_sent', { contestId: contest.id });
         continue;
       }
 
@@ -134,7 +135,7 @@ async function testModeTickClose(client) {
       setTimeout(async () => {
         try {
           await openContest(guild, guildConfig, contestSettings, client);
-          console.log(`[TEST MODE] Contest auto-reopened on guild ${guild.name}`);
+          await log(guild.id, 'contest_auto_reopened', { guildName: guild.name });
         } catch (err) {
           await log(guild.id, 'test_reopen_failed', { error: err.message }, 'error');
         }
@@ -175,6 +176,7 @@ async function sendContestReminder(client) {
       if (!contest.warning_sent && msLeft > 0 && msLeft <= 5 * 60000) {
         await channel.send(`⚠️ **Le concours screenshot ferme** <t:${Math.floor(endsAt.getTime() / 1000)}:R> ! Dernière chance pour voter et participer 📸`);
         await supabase.from('contests').update({ warning_sent: true }).eq('id', contest.id);
+        await log(guild.id, 'contest_warning_sent', { contestId: contest.id });
         continue;
       }
 
@@ -183,6 +185,7 @@ async function sendContestReminder(client) {
       const closeTimestamp = Math.floor(endsAt.getTime() / 1000);
       await channel.send(`⏰ **Rappel** — Le concours screenshot se termine <t:${closeTimestamp}:R> ! Plus que quelques heures pour voter et participer 📸`);
       reminderSentForContest.add(contest.id);
+      await log(guild.id, 'contest_reminder_sent', { contestId: contest.id });
     } catch (err) {
       await log(guild.id, 'reminder_error', { error: err.message }, 'error');
     }
