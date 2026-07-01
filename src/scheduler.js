@@ -94,14 +94,10 @@ async function testModeTickClose(client) {
         .limit(1)
         .single();
 
-      if (!contest) {
-        console.log(`[TICK] ${guild.name} — aucun concours actif`);
-        continue;
-      }
+      if (!contest) continue;
 
       const endsAt = new Date(contest.ends_at);
       const msLeft = endsAt - now;
-      console.log(`[TICK] ${guild.name} — concours ${contest.status} | temps restant: ${Math.round(msLeft / 1000)}s`);
 
       // Send 5-min warning if not already sent
       if (!contest.warning_sent && msLeft > 0 && msLeft <= 5 * 60000) {
