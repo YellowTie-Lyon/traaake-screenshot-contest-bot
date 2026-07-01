@@ -53,21 +53,6 @@ export const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
   new SlashCommandBuilder()
-    .setName('reset')
-    .setDescription('Remettre le classement à zéro (admin uniquement)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addStringOption(opt =>
-      opt.setName('confirmation')
-        .setDescription('Tapez "CONFIRMER" pour valider le reset')
-        .setRequired(true)
-    ),
-
-  new SlashCommandBuilder()
-    .setName('purge')
-    .setDescription('[TEMP] Supprimer tous les messages du salon concours (admin uniquement)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
-
-  new SlashCommandBuilder()
     .setName('monstats')
     .setDescription('Voir tes statistiques de participation au concours screenshot')
     .setDefaultMemberPermissions(null),
