@@ -194,27 +194,37 @@ async function handleLeaderboard(interaction, guildConfig) {
     return;
   }
 
-  const { data: ledger } = await supabase
-    .from('points_ledger')
-    .select('points, participants(discord_username, discord_user_id)')
-    .eq('season_id', season.id);
+  // Points calculated from final_rank (same formula as website)
+  // rank1=120, rank2=80, rank3=50, other=20
+  const POINTS_MAP = { 1: 100, 2: 60, 3: 30 };
+  const PARTICIPATION_POINTS = 20;
 
-  if (!ledger || ledger.length === 0) {
-    await interaction.editReply('Aucun point attribué cette saison.');
+  const { data: participations } = await supabase
+    .from('participations')
+    .select('final_rank, participant_id, participants(discord_username, discord_user_id), contests!inner(season_id, status)')
+    .eq('contests.season_id', season.id)
+    .eq('contests.status', 'closed')
+    .eq('is_valid', true)
+    .not('final_rank', 'is', null);
+
+  if (!participations || participations.length === 0) {
+    await interaction.editReply('Aucun résultat cette saison.');
     return;
   }
 
-  // Aggregate points per participant
   const totals = new Map();
-  for (const entry of ledger) {
-    const key = entry.participants.discord_user_id;
-    totals.set(key, {
-      username: entry.participants.discord_username,
-      points: (totals.get(key)?.points ?? 0) + entry.points,
+  for (const p of participations) {
+    const userId = p.participants.discord_user_id;
+    const pts = PARTICIPATION_POINTS + (POINTS_MAP[p.final_rank] ?? 0);
+    const current = totals.get(userId);
+    totals.set(userId, {
+      username: p.participants.discord_username,
+      points: (current?.points ?? 0) + pts,
+      wins: (current?.wins ?? 0) + (p.final_rank === 1 ? 1 : 0),
     });
   }
 
-  const sorted = [...totals.values()].sort((a, b) => b.points - a.points).slice(0, 10);
+  const sorted = [...totals.values()].sort((a, b) => b.points - a.points || b.wins - a.wins).slice(0, 10);
   const medals = ['🥇', '🥈', '🥉'];
 
   const embed = new EmbedBuilder()
