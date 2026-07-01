@@ -94,6 +94,18 @@ async function testModeTickClose(client) {
       if (!contest) continue;
 
       const endsAt = new Date(contest.ends_at);
+      const msLeft = endsAt - now;
+
+      // Send 5-min warning if not already sent
+      if (!contest.warning_sent && msLeft > 0 && msLeft <= 5 * 60000) {
+        const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
+        if (channel) {
+          await channel.send(`⚠️ **Le concours screenshot ferme dans 5 minutes !** Dernière chance pour voter et participer 📸`);
+        }
+        await supabase.from('contests').update({ warning_sent: true }).eq('id', contest.id);
+        continue;
+      }
+
       if (now < endsAt) continue;
 
       if (contest.status === 'tiebreak') {
@@ -130,6 +142,7 @@ async function testModeTickClose(client) {
 }
 
 async function sendContestReminder(client) {
+  const now = new Date();
   for (const guild of client.guilds.cache.values()) {
     try {
       const config = await getGuildConfig(guild.id);
@@ -138,7 +151,7 @@ async function sendContestReminder(client) {
 
       const { data: contest } = await supabase
         .from('contests')
-        .select('ends_at')
+        .select('id, ends_at, warning_sent')
         .eq('environment_id', guildConfig.environment_id)
         .in('status', ['active', 'tiebreak'])
         .order('created_at', { ascending: false })
@@ -150,7 +163,18 @@ async function sendContestReminder(client) {
       const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
       if (!channel) continue;
 
-      const closeTimestamp = Math.floor(new Date(contest.ends_at).getTime() / 1000);
+      const endsAt = new Date(contest.ends_at);
+      const msLeft = endsAt - now;
+
+      // 5-min warning
+      if (!contest.warning_sent && msLeft > 0 && msLeft <= 5 * 60000) {
+        await channel.send(`⚠️ **Le concours screenshot ferme dans 5 minutes !** Dernière chance pour voter et participer 📸`);
+        await supabase.from('contests').update({ warning_sent: true }).eq('id', contest.id);
+        continue;
+      }
+
+      // Regular reminder
+      const closeTimestamp = Math.floor(endsAt.getTime() / 1000);
       await channel.send(
         `⏰ **Rappel** — Le concours screenshot se termine <t:${closeTimestamp}:R> ! Plus que quelques heures pour voter et participer 📸`
       );
