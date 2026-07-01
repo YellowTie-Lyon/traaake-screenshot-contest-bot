@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js';
 import { log } from './logger.js';
+import { checkAiGenerated, sendAiAlert, ALERT_THRESHOLD } from './ai-check.js';
 
 const VOTE_EMOJI = '❤️';
 
@@ -37,7 +38,7 @@ async function sendDM(user, text) {
   }
 }
 
-export async function handleScreenshotMessage(message, guildConfig, contest, contestSettings) {
+export async function handleScreenshotMessage(message, guildConfig, contest, contestSettings, client) {
   console.log(`[MSG] Message reçu dans salon concours — ${message.author.username} (${message.author.id})`);
 
   const allowText   = contestSettings?.allow_text   ?? false;
@@ -194,6 +195,23 @@ export async function handleScreenshotMessage(message, guildConfig, contest, con
     contestId: contest.id,
     imageUrl,
   });
+
+  // AI detection — fire and forget, no automatic sanction
+  if (imageUrl && client) {
+    checkAiGenerated(imageUrl).then(async score => {
+      if (score === null) return;
+      console.log(`[AI] ${message.author.username} — score IA: ${Math.round(score * 100)}%`);
+      if (score >= ALERT_THRESHOLD) {
+        const { data: participant } = await supabase
+          .from('participants')
+          .select('discord_user_id, discord_username')
+          .eq('discord_user_id', discordUserId)
+          .single();
+        if (participant) await sendAiAlert(client, guildConfig, message, participant, score);
+        await log(guildId, 'ai_alert_sent', { discordUserId, score: Math.round(score * 100) });
+      }
+    }).catch(() => null);
+  }
 
   return true;
 }
