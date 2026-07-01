@@ -115,8 +115,6 @@ async function testModeTickClose(client) {
         continue;
       }
 
-      if (now < endsAt) continue;
-
       if (contest.status === 'tiebreak') {
         const { data: top2 } = await supabase
           .from('participations')
@@ -126,11 +124,14 @@ async function testModeTickClose(client) {
           .limit(2);
 
         const stillTied = top2?.length >= 2 && top2[0].vote_count === top2[1].vote_count;
-        if (stillTied) {
+        if (stillTied && now < endsAt) {
           console.log(`[TICK] Tiebreak toujours en cours — égalité à ${top2[0].vote_count} votes`);
           continue;
         }
-        console.log(`[TICK] Tiebreak résolu — fermeture en cours`);
+        if (!stillTied) console.log(`[TICK] Tiebreak résolu — fermeture en cours`);
+        if (stillTied && now >= endsAt) console.log(`[TICK] Tiebreak expiré — fermeture par ancienneté`);
+      } else if (now < endsAt) {
+        continue;
       }
 
       console.log(`[TICK] Fermeture du concours en cours...`);
