@@ -10,7 +10,7 @@ import { loadAllGuildConfigs, getGuildConfig, getActiveContest, refreshGuildConf
 import { handleScreenshotMessage, handleVoteReaction } from './participation.js';
 import { handleInteraction } from './commands/handlers.js';
 import { commands, registerCommands } from './commands/index.js';
-import { startScheduler, stopScheduler } from './scheduler.js';
+import { startScheduler, stopScheduler, checkPendingReopen } from './scheduler.js';
 import { resyncVotes } from './votes-resync.js';
 
 function createClient() {
@@ -56,6 +56,7 @@ export async function connectBot(env) {
     setLogClient(client);
     await resyncVotes(client);
     startScheduler(client);
+    await checkPendingReopen(client);
     watchContestChanges(client, env);
 
     await log(null, 'bot_connected', { environment: env.name, guilds: client.guilds.cache.size });
@@ -243,14 +244,7 @@ function watchContestChanges(client, env) {
           await log(guildConfig.guild_id, 'contest_suspended_dashboard', { contestId: contest.id });
 
         } else if (contest.status === 'closed') {
-          // Closed from dashboard — trigger full close logic
-          const { openContest, closeContest } = await import('./contest.js');
-          const { data: contestSettings } = await supabase
-            .from('contest_settings')
-            .select('*')
-            .eq('environment_id', env.id)
-            .single();
-
+          const { closeContest } = await import('./contest.js');
           await closeContest(guild, guildConfig, contest, client);
         }
       }

@@ -16,16 +16,17 @@ export function startScheduler(client) {
     tasks.push(setInterval(() => testModeTickClose(client), intervalMs));
     console.log(`[SCHEDULER] TEST MODE — checking every ${TEST_TIEBREAK_CHECK_SECONDS}s`);
   } else {
+    const tz = { timezone: 'Europe/Paris' };
     // Check every minute: close expired active contests, auto-reopen
-    tasks.push(cron.schedule('* * * * *', () => checkContests(client)));
+    tasks.push(cron.schedule('* * * * *', () => checkContests(client), tz));
     // Tiebreak: check every 30s for vote leader
     tasks.push(setInterval(() => checkTiebreak(client), 30000));
-    // Monday 18h00: vote reminder @everyone
-    tasks.push(cron.schedule('0 18 * * 1', () => sendVoteReminder(client)));
-    // Wednesday 17h48: 10min warning before close
-    tasks.push(cron.schedule('48 17 * * 3', () => sendContestWarning(client)));
-    // Daily 18h except Wednesday: promo classement (no @everyone)
-    tasks.push(cron.schedule('0 18 * * 0,1,2,4,5,6', () => sendDailyPromo(client)));
+    // Monday 18h00 Paris: vote reminder @everyone
+    tasks.push(cron.schedule('0 18 * * 1', () => sendVoteReminder(client), tz));
+    // Wednesday 17h48 Paris: 10min warning before close
+    tasks.push(cron.schedule('48 17 * * 3', () => sendContestWarning(client), tz));
+    // Daily 18h Paris except Monday (vote reminder) and Wednesday (close day): promo classement
+    tasks.push(cron.schedule('0 18 * * 0,2,4,5,6', () => sendDailyPromo(client), tz));
   }
 
   console.log('[SCHEDULER] Started.');
@@ -184,6 +185,60 @@ async function sendContestWarning(client) {
       console.log(`[SCHEDULER] Warning fermeture envoyé`);
     } catch (err) {
       await log(guild.id, 'contest_warning_error', { error: err.message }, 'error');
+    }
+  }
+}
+
+// Called once on startup to recover a missed reopen (bot restarted during 2min window)
+export async function checkPendingReopen(client) {
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const config = await getGuildConfig(guild.id);
+      if (!config) continue;
+      const { guildConfig, contestSettings } = config;
+
+      const reopenDelayMinutes = contestSettings?.reopen_delay_minutes;
+      if (!reopenDelayMinutes) continue;
+
+      // Skip if a contest is already active
+      const { data: active } = await supabase
+        .from('contests')
+        .select('id')
+        .eq('environment_id', guildConfig.environment_id)
+        .in('status', ['active', 'tiebreak'])
+        .limit(1)
+        .single();
+      if (active) continue;
+
+      // Check if last closed contest is within the reopen window
+      const { data: lastClosed } = await supabase
+        .from('contests')
+        .select('id, closed_at')
+        .eq('environment_id', guildConfig.environment_id)
+        .eq('status', 'closed')
+        .order('closed_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!lastClosed?.closed_at) continue;
+
+      const msElapsed = Date.now() - new Date(lastClosed.closed_at).getTime();
+      const reopenMs = reopenDelayMinutes * 60000;
+
+      if (msElapsed < reopenMs) {
+        const remainingMs = reopenMs - msElapsed;
+        console.log(`[STARTUP] Réouverture en attente détectée — dans ${Math.round(remainingMs / 1000)}s`);
+        setTimeout(async () => {
+          try {
+            await openContest(guild, guildConfig, contestSettings, client);
+            await log(guild.id, 'contest_auto_reopened', { guildName: guild.name, reason: 'startup_recovery' });
+          } catch (err) {
+            await log(guild.id, 'reopen_startup_failed', { error: err.message }, 'error');
+          }
+        }, remainingMs);
+      }
+    } catch (err) {
+      console.error(`[STARTUP] checkPendingReopen error: ${err.message}`);
     }
   }
 }
