@@ -25,12 +25,12 @@ function getParticipationPoints(contestSettings) {
   return contestSettings?.participation_points ?? 20;
 }
 
-function nextWednesdayAt18() {
+function nextWednesdayAt1758() {
   const now = new Date();
   const result = new Date(now);
   const daysUntilWed = (3 - now.getDay() + 7) % 7 || 7; // at least 1 day ahead
   result.setDate(now.getDate() + daysUntilWed);
-  result.setHours(18, 0, 0, 0);
+  result.setHours(17, 58, 0, 0);
   return result;
 }
 
@@ -47,7 +47,7 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
     ? new Date(Date.now() + TEST_CONTEST_DURATION_MINUTES * 60000)
     : contestSettings?.contest_duration_minutes
       ? new Date(Date.now() + contestSettings.contest_duration_minutes * 60000)
-      : nextWednesdayAt18();
+      : nextWednesdayAt1758();
 
   const { data: contest, error } = await supabase
     .from('contests')
@@ -105,7 +105,7 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
         { name: '⏳ Temps restant', value: `<t:${closeTimestamp}:R>`, inline: true },
         { name: '🏆 Classement', value: '[Voir le classement sur traaake.fr](https://traaake.fr/)', inline: false },
       )
-      .setFooter({ text: 'Relancé chaque mercredi à 18h00 • Communauté TraaaKe' });
+      .setFooter({ text: 'Fermeture mercredi à 17h58 • Relance à 18h00 • Communauté TraaaKe' });
 
     const embedRegles = new EmbedBuilder()
       .setTitle('📋 Règles du concours')
@@ -223,7 +223,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
       // Fall through to normal close logic with reordered participations
     } else {
       // First tie detected → extend (configurable via contest_settings, test mode overrides)
-      const tiebreakHours = contestSettings?.tiebreak_duration_hours ?? 24;
+      const tiebreakHours = contestSettings?.tiebreak_duration_hours ?? 1;
       const tiebreakMs = TEST_MODE
         ? TEST_TIEBREAK_DURATION_MINUTES * 60000
         : tiebreakHours * 3600000;
