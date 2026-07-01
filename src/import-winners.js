@@ -73,7 +73,14 @@ async function importWinners() {
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   });
 
-  await client.login(process.env.DISCORD_BOT_TOKEN);
+  const { data: env } = await supabase
+    .from('environments')
+    .select('discord_bot_token')
+    .eq('id', ENVIRONMENT_ID)
+    .single();
+  if (!env?.discord_bot_token) throw new Error('No discord_bot_token found in environments table');
+
+  await client.login(env.discord_bot_token);
   console.log(`Logged in as ${client.user.tag}`);
 
   const channel = await client.channels.fetch(CHANNEL_ID);
