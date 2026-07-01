@@ -3,7 +3,7 @@ import { supabase } from './supabase.js';
 import { log } from './logger.js';
 import { getGuildConfig } from './config.js';
 import { closeContest, openContest } from './contest.js';
-import { TEST_MODE, TEST_TIEBREAK_CHECK_SECONDS, TEST_REOPEN_DELAY_MINUTES } from './test-mode.js';
+import { TEST_MODE, TEST_TIEBREAK_CHECK_SECONDS, TEST_REOPEN_DELAY_MINUTES, TEST_REMINDER_INTERVAL_MINUTES } from './test-mode.js';
 
 const tasks = [];
 
@@ -15,7 +15,9 @@ export function startScheduler(client) {
     // Check every N seconds if a contest needs closing or tiebreak resolving
     const intervalMs = TEST_TIEBREAK_CHECK_SECONDS * 1000;
     tasks.push(setInterval(() => testModeTickClose(client), intervalMs));
-    console.log(`[SCHEDULER] TEST MODE — checking every ${TEST_TIEBREAK_CHECK_SECONDS}s.`);
+    // Reminder at configured interval
+    tasks.push(setInterval(() => sendContestReminder(client), TEST_REMINDER_INTERVAL_MINUTES * 60000));
+    console.log(`[SCHEDULER] TEST MODE — checking every ${TEST_TIEBREAK_CHECK_SECONDS}s, reminder every ${TEST_REMINDER_INTERVAL_MINUTES}min.`);
   } else {
     // Reminder every 15 minutes if a contest is active
     tasks.push(cron.schedule('*/15 * * * *', () => sendContestReminder(client)));

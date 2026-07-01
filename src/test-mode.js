@@ -15,11 +15,15 @@ export const TEST_TIEBREAK_DURATION_MINUTES = parseInt(process.env.TEST_TIEBREAK
 // Tiebreak check interval in seconds (default: 30)
 export const TEST_TIEBREAK_CHECK_SECONDS = parseInt(process.env.TEST_TIEBREAK_CHECK_SECONDS ?? '30', 10);
 
+// Reminder interval in minutes (default: 5)
+export const TEST_REMINDER_INTERVAL_MINUTES = parseInt(process.env.TEST_REMINDER_INTERVAL_MINUTES ?? '5', 10);
+
 if (TEST_MODE) {
   console.log('[TEST MODE] Active —', {
     contestDuration: `${TEST_CONTEST_DURATION_MINUTES}min`,
     reopenDelay: `${TEST_REOPEN_DELAY_MINUTES}min`,
     tiebreakDuration: `${TEST_TIEBREAK_DURATION_MINUTES}min`,
     tiebreakCheck: `${TEST_TIEBREAK_CHECK_SECONDS}s`,
+    reminderInterval: `${TEST_REMINDER_INTERVAL_MINUTES}min`,
   });
 }
