@@ -1,5 +1,5 @@
 {
-  "name": "traaake-bot",
+  "name": "trakebot",
   "version": "1.0.0",
   "description": "Discord bot for the TraaaKe MSFS Screenshot Contest",
   "main": "src/index.js",
