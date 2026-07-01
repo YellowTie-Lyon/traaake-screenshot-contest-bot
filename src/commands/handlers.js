@@ -49,6 +49,9 @@ export async function handleInteraction(interaction, client) {
   const isAdmin = interaction.member.roles.cache.has(guildConfig.admin_role_id)
     || interaction.member.permissions.has('Administrator');
 
+  const sub = interaction.options.getSubcommand?.() ?? '';
+  console.log(`[CMD] /${interaction.commandName}${sub ? ` ${sub}` : ''} — ${interaction.user.username} (${interaction.user.id})`);
+
   switch (interaction.commandName) {
     case 'contest':
       await handleContestCommand(interaction, guildConfig, contestSettings, isAdmin, client);

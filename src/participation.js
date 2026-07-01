@@ -38,6 +38,8 @@ async function sendDM(user, text) {
 }
 
 export async function handleScreenshotMessage(message, guildConfig, contest) {
+  console.log(`[MSG] Message reçu dans salon concours — ${message.author.username} (${message.author.id})`);
+
   const hasImg = hasImage(message);
   const hasText = hasTextContent(message);
   const imageAttachments = getImageAttachments(message);
@@ -45,6 +47,7 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
 
   // Fichier non-image (vidéo, PDF, etc.)
   if (hasNonImage) {
+    console.log(`[MSG] Rejeté — fichier non-image (${message.author.username})`);
     await message.delete().catch(() => null);
     await sendDM(message.author,
       `❌ **Salon concours** : seules les images sont autorisées. Les autres types de fichiers ne sont pas acceptés.`
@@ -54,6 +57,7 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
 
   // Plusieurs images dans un seul message
   if (imageAttachments.size > 1) {
+    console.log(`[MSG] Rejeté — plusieurs images (${message.author.username})`);
     await message.delete().catch(() => null);
     await sendDM(message.author,
       `❌ **Salon concours** : une seule image par message. Reposte uniquement ta meilleure photo.`
@@ -63,6 +67,7 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
 
   // Pas d'image du tout
   if (!hasImg) {
+    console.log(`[MSG] Rejeté — aucune image (${message.author.username})`);
     await message.delete().catch(() => null);
     await sendDM(message.author,
       `❌ **Salon concours** : seules les images sont autorisées dans ce salon.`
@@ -71,6 +76,7 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
   }
 
   if (hasText) {
+    console.log(`[MSG] Rejeté — texte avec image (${message.author.username})`);
     await message.delete().catch(() => null);
     await sendDM(message.author,
       `❌ **Salon concours** : tu ne peux pas joindre du texte avec ton image. Reposte uniquement l'image, sans texte.`
@@ -173,6 +179,8 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
       `🏆 **${count} participants** cette semaine ! Retrouve le classement de la saison sur **[traaake.fr](https://traaake.fr/)** 📊`
     );
   }
+
+  console.log(`[MSG] Participation acceptée — ${message.author.username} (${discordUserId})`);
 
   await log(guildId, 'participation_submitted', {
     discordUserId,

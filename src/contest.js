@@ -54,6 +54,7 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
     const endLabel   = endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const closeTimestamp = Math.floor(endDate.getTime() / 1000);
 
+    console.log(`[BOT] Message envoyé — ouverture du concours`);
     const openMsg = await channel.send({ content: `@everyone ✈️ Le concours screenshot de la semaine est **ouvert** ! À vos plus beaux clichés !`, allowedMentions: { parse: ['everyone'] } });
 
     const embedAnnonce = new EmbedBuilder()
@@ -170,6 +171,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
             )
             .setColor(0xff9900)
             .setTimestamp();
+          console.log(`[BOT] Message envoyé — tiebreak résolu`);
           await channel.send({ embeds: [embed] });
         }
 
@@ -200,6 +202,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
           )
           .setColor(0xff9900)
           .setTimestamp();
+        console.log(`[BOT] Message envoyé — tiebreak détecté`);
         const tieMsg = await channel.send({ embeds: [embed] });
         await supabase.from('contests').update({ tiebreak_message_id: tieMsg.id }).eq('id', contest.id);
       }
@@ -293,6 +296,8 @@ export async function closeContest(guild, guildConfig, contest, client) {
       if (batch.size < 100) break;
     }
 
+    console.log(`[BOT] Message envoyé — annonce du gagnant (${winner.participants.discord_username})`);
+
     // Transformer l'embed d'annonce/règles en annonce du gagnant (avec mention @everyone)
     if (contest.rules_message_id) {
       const rulesMsg = await channel.messages.fetch(contest.rules_message_id).catch(() => null);
@@ -305,6 +310,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
     }
 
     // DM the winner
+    console.log(`[BOT] DM envoyé au gagnant — ${winner.participants.discord_username}`);
     try {
       const winnerUser = await channel.client.users.fetch(winner.participants.discord_user_id);
       const dm = await winnerUser.createDM();
