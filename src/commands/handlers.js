@@ -199,11 +199,22 @@ async function handleLeaderboard(interaction, guildConfig) {
   const POINTS_MAP = { 1: 100, 2: 60, 3: 30 };
   const PARTICIPATION_POINTS = 20;
 
+  const { data: seasonContests } = await supabase
+    .from('contests')
+    .select('id')
+    .eq('season_id', season.id)
+    .eq('status', 'closed');
+
+  const contestIds = (seasonContests ?? []).map(c => c.id);
+  if (!contestIds.length) {
+    await interaction.editReply('Aucun résultat cette saison.');
+    return;
+  }
+
   const { data: participations } = await supabase
     .from('participations')
-    .select('final_rank, participant_id, participants(discord_username, discord_user_id), contests!inner(season_id, status)')
-    .eq('contests.season_id', season.id)
-    .eq('contests.status', 'closed')
+    .select('final_rank, participant_id, participants(discord_username, discord_user_id)')
+    .in('contest_id', contestIds)
     .eq('is_valid', true)
     .not('final_rank', 'is', null);
 
@@ -526,11 +537,18 @@ async function handleMonStats(interaction, guildConfig) {
     .single();
 
   // All valid participations from closed contests
+  const { data: closedContests } = await supabase
+    .from('contests')
+    .select('id, season_id')
+    .eq('status', 'closed');
+
+  const closedContestIds = (closedContests ?? []).map(c => c.id);
+
   const { data: allParticipations } = await supabase
     .from('participations')
-    .select('final_rank, vote_count, contests!inner(season_id, status)')
+    .select('final_rank, vote_count, contest_id')
     .eq('participant_id', participant.id)
-    .eq('contests.status', 'closed')
+    .in('contest_id', closedContestIds.length ? closedContestIds : ['none'])
     .eq('is_valid', true)
     .not('final_rank', 'is', null);
 
@@ -542,11 +560,13 @@ async function handleMonStats(interaction, guildConfig) {
   let seasonPoints = 0;
   let bestVotes = 0;
 
+  const contestSeasonMap = new Map((closedContests ?? []).map(c => [c.id, c.season_id]));
+
   for (const p of allParticipations ?? []) {
     participationCount++;
     if (p.final_rank === 1) winCount++;
     if ((p.vote_count ?? 0) > bestVotes) bestVotes = p.vote_count ?? 0;
-    if (season && p.contests.season_id === season.id) {
+    if (season && contestSeasonMap.get(p.contest_id) === season.id) {
       seasonPoints += PARTICIPATION_POINTS + (POINTS_MAP[p.final_rank] ?? 0);
     }
   }
