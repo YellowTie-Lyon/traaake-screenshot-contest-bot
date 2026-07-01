@@ -8,7 +8,7 @@ export async function checkAiGenerated(imageUrl, guildId, logFn) {
   if (!API_USER || !API_SECRET) return null;
 
   try {
-    const url = `https://api.sightengine.com/1.0/check.json?url=${encodeURIComponent(imageUrl)}&models=ai-generated&api_user=${API_USER}&api_secret=${API_SECRET}`;
+    const url = `https://api.sightengine.com/1.0/check.json?url=${encodeURIComponent(imageUrl)}&models=genai&api_user=${API_USER}&api_secret=${API_SECRET}`;
     const res = await fetch(url);
     const data = await res.json();
 
@@ -20,7 +20,8 @@ export async function checkAiGenerated(imageUrl, guildId, logFn) {
     });
 
     if (!res.ok || data.status !== 'success') return null;
-    return data.type?.ai_generated ?? null;
+    // genai model returns score under data.type.ai_generated or data.genai.score
+    return data.type?.ai_generated ?? data.genai?.score ?? null;
   } catch (err) {
     await logFn(guildId, 'sightengine_error', { imageUrl, error: err.message }).catch(() => null);
     return null;
