@@ -6,7 +6,6 @@ import { closeContest, openContest } from './contest.js';
 import { TEST_MODE, TEST_TIEBREAK_CHECK_SECONDS, TEST_REOPEN_DELAY_MINUTES, TEST_REMINDER_INTERVAL_MINUTES } from './test-mode.js';
 
 const tasks = [];
-const reminderSentForContest = new Set();
 
 export function startScheduler(client) {
   // Sync guild last_seen every 5 min
@@ -257,7 +256,7 @@ async function sendContestReminder(client) {
 
       const { data: contest } = await supabase
         .from('contests')
-        .select('id, ends_at, warning_sent')
+        .select('id, ends_at, warning_sent, reminder_sent')
         .eq('environment_id', guildConfig.environment_id)
         .in('status', ['active', 'tiebreak'])
         .order('created_at', { ascending: false })
@@ -281,13 +280,13 @@ async function sendContestReminder(client) {
         continue;
       }
 
-      // Regular reminder — once per contest
-      if (reminderSentForContest.has(contest.id)) continue;
+      // Regular reminder — once per contest, persisted in DB to survive restarts
+      if (contest.reminder_sent) continue;
       const closeTimestamp = Math.floor(endsAt.getTime() / 1000);
       const reminderMsg = contestSettings?.reminder_message
         ?? `⏰ **Rappel** — Le concours screenshot se termine <t:${closeTimestamp}:R> ! Plus que quelques heures pour voter et participer 📸`;
       await channel.send(reminderMsg.replace('{timestamp}', `<t:${closeTimestamp}:R>`));
-      reminderSentForContest.add(contest.id);
+      await supabase.from('contests').update({ reminder_sent: true }).eq('id', contest.id);
       await log(guild.id, 'contest_reminder_sent', { contestId: contest.id });
     } catch (err) {
       await log(guild.id, 'reminder_error', { error: err.message }, 'error');
