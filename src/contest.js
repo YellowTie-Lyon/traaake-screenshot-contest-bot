@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 import { log } from './logger.js';
 import { EmbedBuilder } from 'discord.js';
+import { TEST_MODE, TEST_CONTEST_DURATION_MINUTES, TEST_TIEBREAK_DURATION_MINUTES } from './test-mode.js';
 
 const POINTS_MAP = { 1: 100, 2: 60, 3: 30 };
 const PARTICIPATION_POINTS = 20;
@@ -24,7 +25,9 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
   }
 
   const startDate = new Date();
-  const endDate = nextWednesdayAt18();
+  const endDate = TEST_MODE
+    ? new Date(Date.now() + TEST_CONTEST_DURATION_MINUTES * 60000)
+    : nextWednesdayAt18();
 
   const { data: contest, error } = await supabase
     .from('contests')
@@ -174,8 +177,9 @@ export async function closeContest(guild, guildConfig, contest, client) {
       }
       // Fall through to normal close logic with reordered participations
     } else {
-      // First tie detected → extend 24h
-      const newEnd = new Date(Date.now() + 24 * 3600000);
+      // First tie detected → extend (24h normal, configurable in test mode)
+      const tiebreakMs = TEST_MODE ? TEST_TIEBREAK_DURATION_MINUTES * 60000 : 24 * 3600000;
+      const newEnd = new Date(Date.now() + tiebreakMs);
       await supabase.from('contests').update({ ends_at: newEnd.toISOString(), status: 'tiebreak' }).eq('id', contest.id);
 
       if (channel) {
