@@ -108,6 +108,25 @@ async function testModeTickClose(client) {
         continue;
       }
 
+      // Countdown: 3, 2, 1 minute before close
+      const countdownSent = contest.countdown_sent ?? 0;
+      const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
+      if (msLeft > 0 && msLeft <= 3 * 60000 && countdownSent < 1) {
+        if (channel) await channel.send(`🔴 **Le concours screenshot ferme dans 3 minutes !**`);
+        await supabase.from('contests').update({ countdown_sent: 1 }).eq('id', contest.id);
+        continue;
+      }
+      if (msLeft > 0 && msLeft <= 2 * 60000 && countdownSent < 2) {
+        if (channel) await channel.send(`🔴 **Le concours screenshot ferme dans 2 minutes !**`);
+        await supabase.from('contests').update({ countdown_sent: 2 }).eq('id', contest.id);
+        continue;
+      }
+      if (msLeft > 0 && msLeft <= 1 * 60000 && countdownSent < 3) {
+        if (channel) await channel.send(`🔴 **Le concours screenshot ferme dans 1 minute !**`);
+        await supabase.from('contests').update({ countdown_sent: 3 }).eq('id', contest.id);
+        continue;
+      }
+
       if (now < endsAt) continue;
 
       if (contest.status === 'tiebreak') {
