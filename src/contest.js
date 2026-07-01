@@ -4,10 +4,10 @@ import { EmbedBuilder } from 'discord.js';
 import { TEST_MODE, TEST_CONTEST_DURATION_MINUTES, TEST_TIEBREAK_DURATION_MINUTES } from './test-mode.js';
 
 function formatDuration(hours) {
-  if (hours < 1) {
-    const mins = Math.round(hours * 60);
-    return `${mins} minute${mins > 1 ? 's' : ''}`;
-  }
+  const totalSeconds = Math.round(hours * 3600);
+  if (totalSeconds < 60) return `${totalSeconds} secondes`;
+  const mins = Math.round(hours * 60);
+  if (mins < 60) return `${mins} minute${mins > 1 ? 's' : ''}`;
   return `${hours}h`;
 }
 
@@ -243,7 +243,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
             `${tiedMentions} sont à égalité avec **${topVotes} ❤️**. Le concours est **prolongé de ${tiebreakLabel}** pour départager les concurrents !\n\n` +
             `🗳️ Continuez à voter pour votre screenshot préféré — chaque vote compte !\n` +
             `⏳ Nouveau délai de fermeture : <t:${Math.floor(newEnd.getTime() / 1000)}:R>\n` +
-            `🔄 Le vainqueur est vérifié **toutes les 30 secondes** — dès qu'un participant prend l'avantage, le concours se ferme immédiatement !\n\n` +
+            `🔄 Le vainqueur est vérifié **toutes les minutes** — dès qu'un participant prend l'avantage, le concours se ferme immédiatement !\n\n` +
             `*En cas d'égalité persistante à la fin du délai, le gagnant sera désigné par ancienneté de publication.*`
           )
           .setColor(0xff9900)
