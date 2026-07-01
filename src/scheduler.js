@@ -16,7 +16,8 @@ export function startScheduler(client) {
     // Check every N seconds if a contest needs closing or tiebreak resolving
     const intervalMs = TEST_TIEBREAK_CHECK_SECONDS * 1000;
     tasks.push(setInterval(() => testModeTickClose(client), intervalMs));
-    // Reminder at configured interval
+    // Reminder at configured interval — also run immediately on startup to catch missed windows
+    sendContestReminder(client);
     tasks.push(setInterval(() => sendContestReminder(client), TEST_REMINDER_INTERVAL_MINUTES * 60000));
     console.log(`[SCHEDULER] TEST MODE — checking every ${TEST_TIEBREAK_CHECK_SECONDS}s, reminder every ${TEST_REMINDER_INTERVAL_MINUTES}min.`);
   } else {
