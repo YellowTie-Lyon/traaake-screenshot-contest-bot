@@ -124,9 +124,11 @@ async function testModeTickClose(client) {
       }
 
       // Close the contest
-      await closeContest(guild, guildConfig, contest, client);
+      const result = await closeContest(guild, guildConfig, contest, client);
 
-      // Auto-reopen after delay
+      // Only auto-reopen if contest truly closed (not just extended for tiebreak)
+      if (result?.tied) continue;
+
       const reopenMs = TEST_REOPEN_DELAY_MINUTES * 60000;
       setTimeout(async () => {
         try {
