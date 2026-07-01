@@ -37,18 +37,23 @@ async function sendDM(user, text) {
   }
 }
 
-export async function handleScreenshotMessage(message, guildConfig, contest) {
+export async function handleScreenshotMessage(message, guildConfig, contest, contestSettings) {
   console.log(`[MSG] Message reçu dans salon concours — ${message.author.username} (${message.author.id})`);
+
+  const allowText   = contestSettings?.allow_text   ?? false;
+  const allowVideos = contestSettings?.allow_videos  ?? false;
+  const deleteInvalid = contestSettings?.delete_invalid_messages ?? true;
 
   const hasImg = hasImage(message);
   const hasText = hasTextContent(message);
   const imageAttachments = getImageAttachments(message);
   const hasNonImage = hasNonImageAttachment(message);
 
-  // Fichier non-image (vidéo, PDF, etc.)
-  if (hasNonImage) {
+  // Fichier non-image non-vidéo (PDF, etc.) — toujours rejeté
+  const hasVideo = message.attachments.some(a => a.contentType?.startsWith('video/'));
+  if (hasNonImage && !(allowVideos && hasVideo)) {
     console.log(`[MSG] Rejeté — fichier non-image (${message.author.username})`);
-    await message.delete().catch(() => null);
+    if (deleteInvalid) await message.delete().catch(() => null);
     await sendDM(message.author,
       `❌ **Salon concours** : seules les images sont autorisées. Les autres types de fichiers ne sont pas acceptés.`
     );
@@ -58,26 +63,26 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
   // Plusieurs images dans un seul message
   if (imageAttachments.size > 1) {
     console.log(`[MSG] Rejeté — plusieurs images (${message.author.username})`);
-    await message.delete().catch(() => null);
+    if (deleteInvalid) await message.delete().catch(() => null);
     await sendDM(message.author,
       `❌ **Salon concours** : une seule image par message. Reposte uniquement ta meilleure photo.`
     );
     return false;
   }
 
-  // Pas d'image du tout
-  if (!hasImg) {
+  // Pas d'image du tout (ni vidéo si autorisée)
+  if (!hasImg && !(allowVideos && hasVideo)) {
     console.log(`[MSG] Rejeté — aucune image (${message.author.username})`);
-    await message.delete().catch(() => null);
+    if (deleteInvalid) await message.delete().catch(() => null);
     await sendDM(message.author,
       `❌ **Salon concours** : seules les images sont autorisées dans ce salon.`
     );
     return false;
   }
 
-  if (hasText) {
+  if (!allowText && hasText) {
     console.log(`[MSG] Rejeté — texte avec image (${message.author.username})`);
-    await message.delete().catch(() => null);
+    if (deleteInvalid) await message.delete().catch(() => null);
     await sendDM(message.author,
       `❌ **Salon concours** : tu ne peux pas joindre du texte avec ton image. Reposte uniquement l'image, sans texte.`
     );
@@ -174,7 +179,8 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
     .select('id', { count: 'exact', head: true })
     .eq('contest_id', contest.id);
 
-  if (count && count % 5 === 0) {
+  const promoInterval = contestSettings?.promo_interval ?? 5;
+  if (count && promoInterval > 0 && count % promoInterval === 0) {
     await message.channel.send(
       `🏆 Le classement de la saison est disponible sur **[traaake.fr](https://traaake.fr/)** — viens voir où tu en es ! 📊`
     );

@@ -97,7 +97,7 @@ export async function connectBot(env) {
       }
       return;
     }
-    await handleScreenshotMessage(message, config.guildConfig, contest);
+    await handleScreenshotMessage(message, config.guildConfig, contest, config.contestSettings);
   });
 
   client.on(Events.MessageReactionAdd, async (reaction, user) => {

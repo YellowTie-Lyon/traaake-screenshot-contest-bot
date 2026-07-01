@@ -3,9 +3,19 @@ import { log } from './logger.js';
 import { EmbedBuilder } from 'discord.js';
 import { TEST_MODE, TEST_CONTEST_DURATION_MINUTES, TEST_TIEBREAK_DURATION_MINUTES } from './test-mode.js';
 
-const POINTS_MAP = { 1: 100, 2: 60, 3: 30 };
-const PARTICIPATION_POINTS = 20;
 const VOTE_EMOJI = '❤️';
+
+function getPointsMap(contestSettings) {
+  return {
+    1: contestSettings?.points_1st ?? 100,
+    2: contestSettings?.points_2nd ?? 60,
+    3: contestSettings?.points_3rd ?? 30,
+  };
+}
+
+function getParticipationPoints(contestSettings) {
+  return contestSettings?.participation_points ?? 20;
+}
 
 function nextWednesdayAt18() {
   const now = new Date();
@@ -105,6 +115,15 @@ export async function closeContest(guild, guildConfig, contest, client) {
     .from('contests').select('status').eq('id', contest.id).single();
   if (!freshContest || freshContest.status === 'closed') return { tied: false };
 
+  const { data: contestSettings } = await supabase
+    .from('contest_settings')
+    .select('*')
+    .eq('environment_id', guildConfig.environment_id)
+    .single();
+
+  const POINTS_MAP = getPointsMap(contestSettings);
+  const PARTICIPATION_POINTS = getParticipationPoints(contestSettings);
+
   const { data: participations } = await supabase
     .from('participations')
     .select('*, participants(*)')
@@ -179,8 +198,9 @@ export async function closeContest(guild, guildConfig, contest, client) {
       }
       // Fall through to normal close logic with reordered participations
     } else {
-      // First tie detected → extend (24h normal, configurable in test mode)
-      const tiebreakMs = TEST_MODE ? TEST_TIEBREAK_DURATION_MINUTES * 60000 : 24 * 3600000;
+      // First tie detected → extend (configurable via contest_settings, test mode overrides)
+      const tiebreakHours = contestSettings?.tiebreak_duration_hours ?? 24;
+      const tiebreakMs = TEST_MODE ? TEST_TIEBREAK_DURATION_MINUTES * 60000 : tiebreakHours * 3600000;
       const newEnd = new Date(Date.now() + tiebreakMs);
       await supabase.from('contests').update({ ends_at: newEnd.toISOString(), status: 'tiebreak' }).eq('id', contest.id);
 
@@ -190,7 +210,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
         const tiedAll = participations.filter(p => p.vote_count === topVotes);
         const tiedMentions = tiedAll.map(p => `<@${p.participants.discord_user_id}>`).join(', ');
 
-        const tiebreakLabel = TEST_MODE ? '30 minutes' : '24h';
+        const tiebreakLabel = TEST_MODE ? `${TEST_TIEBREAK_DURATION_MINUTES} minutes` : `${tiebreakHours}h`;
         const embed = new EmbedBuilder()
           .setTitle('⚖️ Égalité détectée !')
           .setDescription(

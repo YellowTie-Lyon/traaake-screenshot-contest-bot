@@ -21,8 +21,8 @@ export function startScheduler(client) {
     tasks.push(setInterval(() => sendContestReminder(client), TEST_REMINDER_INTERVAL_MINUTES * 60000));
     console.log(`[SCHEDULER] TEST MODE — checking every ${TEST_TIEBREAK_CHECK_SECONDS}s, reminder every ${TEST_REMINDER_INTERVAL_MINUTES}min.`);
   } else {
-    // Reminder every Monday at 18:00 with @everyone
-    tasks.push(cron.schedule('0 18 * * 1', () => sendContestReminder(client)));
+    // Check every minute if it's time to send the reminder (day+hour read from DB)
+    tasks.push(cron.schedule('* * * * *', () => checkReminderSchedule(client)));
   }
 
   console.log('[SCHEDULER] Started.');
@@ -108,8 +108,9 @@ async function testModeTickClose(client) {
       const endsAt = new Date(contest.ends_at);
       const msLeft = endsAt - now;
 
-      // Send 5-min warning if not already sent
-      if (!contest.warning_sent && msLeft > 0 && msLeft <= 5 * 60000) {
+      // Send warning N minutes before end (configurable, default 5)
+      const warningMs = (contestSettings?.warning_minutes ?? 5) * 60000;
+      if (!contest.warning_sent && msLeft > 0 && msLeft <= warningMs) {
         const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
         if (channel) {
           await channel.send(`⚠️ **Le concours screenshot ferme** <t:${Math.floor(endsAt.getTime() / 1000)}:R> ! Dernière chance pour voter et participer 📸`);
@@ -221,13 +222,35 @@ async function testModeTickClose(client) {
   }
 }
 
+// In production: check every minute if it's the configured reminder day+hour
+async function checkReminderSchedule(client) {
+  const now = new Date();
+  // Only trigger at minute 0 (i.e. exactly on the hour)
+  if (now.getMinutes() !== 0) return;
+
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const config = await getGuildConfig(guild.id);
+      if (!config) continue;
+      const { contestSettings } = config;
+      const reminderDay  = contestSettings?.reminder_day  ?? 1; // Monday
+      const reminderHour = contestSettings?.reminder_hour ?? 18;
+      if (now.getDay() === reminderDay && now.getHours() === reminderHour) {
+        await sendContestReminder(client);
+      }
+    } catch (err) {
+      await log(guild.id, 'reminder_schedule_error', { error: err.message }, 'error');
+    }
+  }
+}
+
 async function sendContestReminder(client) {
   const now = new Date();
   for (const guild of client.guilds.cache.values()) {
     try {
       const config = await getGuildConfig(guild.id);
       if (!config) continue;
-      const { guildConfig } = config;
+      const { guildConfig, contestSettings } = config;
 
       const { data: contest } = await supabase
         .from('contests')
@@ -246,8 +269,9 @@ async function sendContestReminder(client) {
       const endsAt = new Date(contest.ends_at);
       const msLeft = endsAt - now;
 
-      // 5-min warning
-      if (!contest.warning_sent && msLeft > 0 && msLeft <= 5 * 60000) {
+      // Warning N minutes before end
+      const warningMs = (contestSettings?.warning_minutes ?? 5) * 60000;
+      if (!contest.warning_sent && msLeft > 0 && msLeft <= warningMs) {
         await channel.send(`⚠️ **Le concours screenshot ferme** <t:${Math.floor(endsAt.getTime() / 1000)}:R> ! Dernière chance pour voter et participer 📸`);
         await supabase.from('contests').update({ warning_sent: true }).eq('id', contest.id);
         await log(guild.id, 'contest_warning_sent', { contestId: contest.id });
@@ -257,7 +281,9 @@ async function sendContestReminder(client) {
       // Regular reminder — once per contest
       if (reminderSentForContest.has(contest.id)) continue;
       const closeTimestamp = Math.floor(endsAt.getTime() / 1000);
-      await channel.send(`⏰ **Rappel** — Le concours screenshot se termine <t:${closeTimestamp}:R> ! Plus que quelques heures pour voter et participer 📸`);
+      const reminderMsg = contestSettings?.reminder_message
+        ?? `⏰ **Rappel** — Le concours screenshot se termine <t:${closeTimestamp}:R> ! Plus que quelques heures pour voter et participer 📸`;
+      await channel.send(reminderMsg.replace('{timestamp}', `<t:${closeTimestamp}:R>`));
       reminderSentForContest.add(contest.id);
       await log(guild.id, 'contest_reminder_sent', { contestId: contest.id });
     } catch (err) {
@@ -272,5 +298,48 @@ async function syncGuilds(client) {
       .from('discord_guild_configs')
       .update({ last_sync: new Date().toISOString() })
       .eq('guild_id', guild.id);
+
+    // Sync available text channels
+    const channels = guild.channels.cache
+      .filter(c => ['GuildText', 'GuildAnnouncement'].includes(c.type?.toString() ?? c.constructor.name))
+      .map(c => ({
+        guild_id: guild.id,
+        channel_id: c.id,
+        channel_name: c.name,
+        channel_type: c.type?.toString() === 'GuildAnnouncement' ? 'announcement' : 'text',
+        updated_at: new Date().toISOString(),
+      }));
+
+    if (channels.length) {
+      await supabase.from('guild_channels').upsert(channels, { onConflict: 'guild_id,channel_id' });
+      // Remove stale channels no longer in guild
+      const currentIds = channels.map(c => c.channel_id);
+      await supabase.from('guild_channels')
+        .delete()
+        .eq('guild_id', guild.id)
+        .not('channel_id', 'in', `(${currentIds.join(',')})`);
+    }
+
+    // Sync available roles (exclude @everyone)
+    const roles = guild.roles.cache
+      .filter(r => r.id !== guild.id)
+      .map(r => ({
+        guild_id: guild.id,
+        role_id: r.id,
+        role_name: r.name,
+        role_color: r.color,
+        position: r.position,
+        updated_at: new Date().toISOString(),
+      }));
+
+    if (roles.length) {
+      await supabase.from('guild_roles').upsert(roles, { onConflict: 'guild_id,role_id' });
+      // Remove stale roles no longer in guild
+      const currentRoleIds = roles.map(r => r.role_id);
+      await supabase.from('guild_roles')
+        .delete()
+        .eq('guild_id', guild.id)
+        .not('role_id', 'in', `(${currentRoleIds.join(',')})`);
+    }
   }
 }
