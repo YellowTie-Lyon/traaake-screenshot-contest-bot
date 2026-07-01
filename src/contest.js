@@ -282,15 +282,23 @@ export async function closeContest(guild, guildConfig, contest, client) {
   // Award points — participation (everyone) + podium bonus (top 3)
   for (let i = 0; i < participations.length; i++) {
     const participation = participations[i];
-    const podiumBonus = POINTS_MAP[i + 1] ?? 0;
+    const rank = i + 1;
+    const podiumBonus = POINTS_MAP[rank] ?? 0;
     const total = PARTICIPATION_POINTS + podiumBonus;
+
+    // Set final_rank and is_winner on participation
+    await supabase.from('participations').update({
+      final_rank: rank,
+      is_winner: rank === 1,
+      is_valid: true,
+    }).eq('id', participation.id);
 
     await supabase.from('points_ledger').insert({
       participant_id: participation.participant_id,
       season_id: contest.season_id,
       points: total,
       reason: podiumBonus > 0
-        ? `Concours #${contest.id} — place ${i + 1} (+${podiumBonus} bonus)`
+        ? `Concours #${contest.id} — place ${rank} (+${podiumBonus} bonus)`
         : `Concours #${contest.id} — participation`,
       contest_id: contest.id,
     });
@@ -305,7 +313,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
     if (currentStats) {
       await supabase.from('participants').update({
         participation_count: currentStats.participation_count + 1,
-        ...(i === 0 ? { win_count: currentStats.win_count + 1 } : {}),
+        ...(rank === 1 ? { win_count: currentStats.win_count + 1 } : {}),
       }).eq('id', participation.participant_id);
     }
   }
