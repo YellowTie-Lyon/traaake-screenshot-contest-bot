@@ -180,6 +180,19 @@ async function testModeTickClose(client) {
       console.log(`[TICK] Réouverture programmée dans ${TEST_REOPEN_DELAY_MINUTES} minutes`);
       setTimeout(async () => {
         try {
+          const { data: existing } = await supabase
+            .from('contests')
+            .select('id')
+            .eq('environment_id', guildConfig.environment_id)
+            .in('status', ['active', 'tiebreak'])
+            .limit(1)
+            .single();
+
+          if (existing) {
+            console.log(`[TICK] Réouverture annulée — un concours est déjà en cours`);
+            return;
+          }
+
           await openContest(guild, guildConfig, contestSettings, client);
           console.log(`[TICK] Concours réouvert sur ${guild.name}`);
           await log(guild.id, 'contest_auto_reopened', { guildName: guild.name });

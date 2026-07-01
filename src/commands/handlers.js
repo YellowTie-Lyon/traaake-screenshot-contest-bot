@@ -52,28 +52,40 @@ export async function handleInteraction(interaction, client) {
   const sub = interaction.options.getSubcommand?.() ?? '';
   console.log(`[CMD] /${interaction.commandName}${sub ? ` ${sub}` : ''} — ${interaction.user.username} (${interaction.user.id})`);
 
-  switch (interaction.commandName) {
-    case 'contest':
-      await handleContestCommand(interaction, guildConfig, contestSettings, isAdmin, client);
-      break;
-    case 'classement':
-      await handleLeaderboard(interaction, guildConfig);
-      break;
-    case 'syncconfig':
-      await handleSyncConfig(interaction, guildId, isAdmin);
-      break;
-    case 'reset':
-      await handleReset(interaction, guildConfig, isAdmin);
-      break;
-    case 'purge':
-      await handlePurge(interaction, guildConfig, isAdmin);
-      break;
-    case 'monstats':
-      await handleMonStats(interaction, guildConfig);
-      break;
-    case 'points':
-      await handlePoints(interaction, guildConfig, isAdmin);
-      break;
+  try {
+    switch (interaction.commandName) {
+      case 'contest':
+        await handleContestCommand(interaction, guildConfig, contestSettings, isAdmin, client);
+        break;
+      case 'classement':
+        await handleLeaderboard(interaction, guildConfig);
+        break;
+      case 'syncconfig':
+        await handleSyncConfig(interaction, guildId, isAdmin);
+        break;
+      case 'reset':
+        await handleReset(interaction, guildConfig, isAdmin);
+        break;
+      case 'purge':
+        await handlePurge(interaction, guildConfig, isAdmin);
+        break;
+      case 'monstats':
+        await handleMonStats(interaction, guildConfig);
+        break;
+      case 'points':
+        await handlePoints(interaction, guildConfig, isAdmin);
+        break;
+    }
+  } catch (err) {
+    console.error(`[CMD] Erreur non gérée dans /${interaction.commandName}: ${err.message}`);
+    try {
+      const msg = `❌ Une erreur est survenue : ${err.message}`;
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(msg);
+      } else {
+        await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
+      }
+    } catch { /* interaction may have expired */ }
   }
 }
 
