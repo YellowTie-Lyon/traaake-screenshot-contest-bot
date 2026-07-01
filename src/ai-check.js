@@ -4,17 +4,25 @@ const API_SECRET = process.env.SIGHTENGINE_API_SECRET;
 // Minimum probability (0–1) to send a mod alert
 const ALERT_THRESHOLD = 0.40;
 
-export async function checkAiGenerated(imageUrl) {
+export async function checkAiGenerated(imageUrl, guildId, logFn) {
   if (!API_USER || !API_SECRET) return null;
 
   try {
     const url = `https://api.sightengine.com/1.0/check.json?url=${encodeURIComponent(imageUrl)}&models=ai-generated&api_user=${API_USER}&api_secret=${API_SECRET}`;
     const res = await fetch(url);
-    if (!res.ok) return null;
     const data = await res.json();
-    if (data.status !== 'success') return null;
+
+    await logFn(guildId, 'sightengine_check', {
+      imageUrl,
+      status: data.status,
+      score: data.type?.ai_generated ?? null,
+      error: data.error ?? null,
+    });
+
+    if (!res.ok || data.status !== 'success') return null;
     return data.type?.ai_generated ?? null;
-  } catch {
+  } catch (err) {
+    await logFn(guildId, 'sightengine_error', { imageUrl, error: err.message }).catch(() => null);
     return null;
   }
 }

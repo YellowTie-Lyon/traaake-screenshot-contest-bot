@@ -198,7 +198,7 @@ export async function handleScreenshotMessage(message, guildConfig, contest, con
 
   // AI detection — fire and forget, no automatic sanction
   if (imageUrl && client) {
-    checkAiGenerated(imageUrl).then(async score => {
+    checkAiGenerated(imageUrl, guildId, log).then(async score => {
       if (score === null) return;
       console.log(`[AI] ${message.author.username} — score IA: ${Math.round(score * 100)}%`);
       if (score >= ALERT_THRESHOLD) {
