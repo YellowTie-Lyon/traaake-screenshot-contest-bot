@@ -17,9 +17,6 @@ export const commands = [
       sub.setName('status').setDescription('Voir le statut du concours actuel')
     )
     .addSubcommand(sub =>
-      sub.setName('check').setDescription('Forcer la vérification des votes maintenant (admin)')
-    )
-    .addSubcommand(sub =>
       sub.setName('ban')
         .setDescription('Exclure un membre du concours (admin)')
         .addUserOption(opt => opt.setName('membre').setDescription('Membre à exclure').setRequired(true))

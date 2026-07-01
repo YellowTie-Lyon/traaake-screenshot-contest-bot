@@ -3,7 +3,6 @@ import { getGuildConfig, getActiveContest, invalidateCache } from '../config.js'
 import { openContest, closeContest } from '../contest.js';
 import { log } from '../logger.js';
 import { supabase } from '../supabase.js';
-import { checkContests } from '../scheduler.js';
 
 // Rate limiting: max 2 uses per user per 30s for public commands
 const rateLimitMap = new Map();
@@ -129,11 +128,6 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
     } else {
       await interaction.editReply('✅ Concours fermé et gagnants annoncés !');
     }
-
-  } else if (sub === 'check') {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    await checkContests(client);
-    await interaction.editReply('✅ Vérification des votes effectuée.');
 
   } else if (sub === 'ban') {
     await handleBan(interaction, guildConfig, isAdmin);
