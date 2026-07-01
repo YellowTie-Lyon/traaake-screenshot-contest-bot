@@ -49,7 +49,7 @@ export async function handleInteraction(interaction, client) {
   const isAdmin = interaction.member.roles.cache.has(guildConfig.admin_role_id)
     || interaction.member.permissions.has('Administrator');
 
-  const sub = interaction.options.getSubcommand?.() ?? '';
+  const sub = interaction.options.getSubcommand?.(false) ?? '';
   console.log(`[CMD] /${interaction.commandName}${sub ? ` ${sub}` : ''} — ${interaction.user.username} (${interaction.user.id})`);
 
   try {
