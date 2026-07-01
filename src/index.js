@@ -26,7 +26,7 @@ async function onDeactivate(env) {
 }
 
 async function main() {
-  console.log('[MAIN] Starting TraKr bot process...');
+  console.log('[MAIN] Starting TraaaKe bot process...');
 
   // Fetch this process's environment row from Supabase
   const env = await fetchEnvironment();
