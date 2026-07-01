@@ -6,6 +6,7 @@ import { closeContest, openContest } from './contest.js';
 import { TEST_MODE, TEST_TIEBREAK_CHECK_SECONDS, TEST_REOPEN_DELAY_MINUTES, TEST_REMINDER_INTERVAL_MINUTES } from './test-mode.js';
 
 const tasks = [];
+const reminderSentForContest = new Set();
 
 export function startScheduler(client) {
   // Sync guild last_seen every 5 min
@@ -177,9 +178,11 @@ async function sendContestReminder(client) {
         continue;
       }
 
-      // Regular reminder
+      // Regular reminder — once per contest
+      if (reminderSentForContest.has(contest.id)) continue;
       const closeTimestamp = Math.floor(endsAt.getTime() / 1000);
       await channel.send(`⏰ **Rappel** — Le concours screenshot se termine <t:${closeTimestamp}:R> ! Plus que quelques heures pour voter et participer 📸`);
+      reminderSentForContest.add(contest.id);
     } catch (err) {
       await log(guild.id, 'reminder_error', { error: err.message }, 'error');
     }
