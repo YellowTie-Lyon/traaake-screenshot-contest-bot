@@ -366,7 +366,7 @@ async function testModeTickClose(client) {
                   `${tiedMentions} sont à égalité avec **${topVotes} ❤️**. Le concours est **prolongé de ${tiebreakLabel}** pour départager les concurrents !\n\n` +
                   `🗳️ Continuez à voter pour votre screenshot préféré — chaque vote compte !\n` +
                   `⏳ Nouveau délai de fermeture : <t:${Math.floor(new Date(contest.ends_at).getTime() / 1000)}:R>\n` +
-                  `🔄 Le vainqueur est vérifié **toutes les minutes** — dès qu'un participant prend l'avantage, le concours se ferme immédiatement !\n\n` +
+                  `🔄 Le vainqueur est vérifié **toutes les 30 secondes** — dès qu'un participant prend l'avantage, le concours se ferme immédiatement !\n\n` +
                   `*En cas d'égalité persistante à la fin du délai, le gagnant sera désigné par ancienneté de publication.*`
                 )
                 .setColor(0xff9900)
