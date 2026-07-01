@@ -37,40 +37,48 @@ export function stopScheduler() {
   console.log('[SCHEDULER] Stopped.');
 }
 
-// Called manually via /contest check to force tiebreak resolution check
+// Called manually via /contest check to force close/tiebreak resolution
 export async function checkContests(client) {
+  const now = new Date();
   for (const guild of client.guilds.cache.values()) {
     try {
       const config = await getGuildConfig(guild.id);
       if (!config) continue;
 
       const { guildConfig } = config;
-      const environmentId = guildConfig.environment_id;
 
       const { data: contest } = await supabase
         .from('contests')
         .select('*')
-        .eq('environment_id', environmentId)
-        .eq('status', 'tiebreak')
+        .eq('environment_id', guildConfig.environment_id)
+        .in('status', ['active', 'tiebreak'])
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
 
       if (!contest) continue;
 
-      // Check if tiebreak is resolved
-      const { data: top2 } = await supabase
-        .from('participations')
-        .select('id, vote_count')
-        .eq('contest_id', contest.id)
-        .order('vote_count', { ascending: false })
-        .limit(2);
+      const endsAt = new Date(contest.ends_at);
 
-      const stillTied = top2?.length >= 2 && top2[0].vote_count === top2[1].vote_count;
-      if (stillTied) continue;
+      if (contest.status === 'tiebreak') {
+        // Check if tie is resolved (someone took the lead)
+        const { data: top2 } = await supabase
+          .from('participations')
+          .select('id, vote_count')
+          .eq('contest_id', contest.id)
+          .order('vote_count', { ascending: false })
+          .limit(2);
 
-      // Tie resolved → close now
-      await closeContest(guild, guildConfig, contest, client);
+        const stillTied = top2?.length >= 2 && top2[0].vote_count === top2[1].vote_count;
+
+        // Close if tie resolved OR tiebreak period expired
+        if (!stillTied || now >= endsAt) {
+          await closeContest(guild, guildConfig, contest, client);
+        }
+      } else if (now >= endsAt) {
+        // Active contest past its end time → close
+        await closeContest(guild, guildConfig, contest, client);
+      }
 
     } catch (err) {
       await log(guild.id, 'scheduler_error', { error: err.message }, 'error');
