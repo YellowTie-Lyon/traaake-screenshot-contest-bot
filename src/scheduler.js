@@ -312,8 +312,10 @@ async function syncGuilds(client) {
   for (const guild of client.guilds.cache.values()) {
     await supabase
       .from('discord_guild_configs')
-      .update({ last_sync: new Date().toISOString() })
-      .eq('guild_id', guild.id);
+      .upsert(
+        { guild_id: guild.id, guild_name: guild.name, bot_present: true, last_sync: new Date().toISOString() },
+        { onConflict: 'guild_id', ignoreDuplicates: false }
+      );
 
     // Sync available text channels
     const channels = guild.channels.cache
