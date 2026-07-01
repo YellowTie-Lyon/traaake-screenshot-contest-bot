@@ -12,12 +12,9 @@ export function startScheduler(client) {
   tasks.push(cron.schedule('*/5 * * * *', () => syncGuilds(client)));
 
   if (TEST_MODE) {
-    // Check every N seconds if a contest needs closing or tiebreak resolving
+    // Check every N seconds if a contest needs closing, tiebreak resolving, or reminder sending
     const intervalMs = TEST_TIEBREAK_CHECK_SECONDS * 1000;
     tasks.push(setInterval(() => testModeTickClose(client), intervalMs));
-    // Reminder at configured interval — also run immediately on startup to catch missed windows
-    sendContestReminder(client);
-    tasks.push(setInterval(() => sendContestReminder(client), TEST_REMINDER_INTERVAL_MINUTES * 60000));
     console.log(`[SCHEDULER] TEST MODE — checking every ${TEST_TIEBREAK_CHECK_SECONDS}s, reminder every ${TEST_REMINDER_INTERVAL_MINUTES}min.`);
   } else {
     // Check every minute if it's time to send the reminder (day+hour read from DB)
@@ -106,6 +103,21 @@ async function testModeTickClose(client) {
 
       const endsAt = new Date(contest.ends_at);
       const msLeft = endsAt - now;
+      const totalMs = endsAt - new Date(contest.started_at);
+
+      // Send reminder once at halfway point (or later) if not already sent
+      if (!contest.reminder_sent && msLeft > 0 && (totalMs - msLeft) >= totalMs / 2) {
+        const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
+        if (channel) {
+          const closeTimestamp = Math.floor(endsAt.getTime() / 1000);
+          const reminderMsg = contestSettings?.reminder_message
+            ?? `⏰ **Rappel** — Le concours screenshot se termine <t:${closeTimestamp}:R> ! Plus que quelques heures pour voter et participer 📸`;
+          await channel.send(reminderMsg.replace('{timestamp}', `<t:${closeTimestamp}:R>`));
+        }
+        await supabase.from('contests').update({ reminder_sent: true }).eq('id', contest.id);
+        await log(guild.id, 'contest_reminder_sent', { contestId: contest.id });
+        console.log(`[TICK] Rappel envoyé`);
+      }
 
       // Send warning N minutes before end (configurable, default 5)
       const warningMs = (contestSettings?.warning_minutes ?? 5) * 60000;
