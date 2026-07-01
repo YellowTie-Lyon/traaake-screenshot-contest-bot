@@ -102,7 +102,7 @@ async function testModeTickClose(client) {
       if (!contest.warning_sent && msLeft > 0 && msLeft <= 5 * 60000) {
         const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
         if (channel) {
-          await channel.send(`⚠️ **Le concours screenshot ferme dans 5 minutes !** Dernière chance pour voter et participer 📸`);
+          await channel.send(`⚠️ **Le concours screenshot ferme** <t:${Math.floor(endsAt.getTime() / 1000)}:R> ! Dernière chance pour voter et participer 📸`);
         }
         await supabase.from('contests').update({ warning_sent: true }).eq('id', contest.id);
         continue;
@@ -170,7 +170,7 @@ async function sendContestReminder(client) {
 
       // 5-min warning
       if (!contest.warning_sent && msLeft > 0 && msLeft <= 5 * 60000) {
-        await channel.send(`⚠️ **Le concours screenshot ferme dans 5 minutes !** Dernière chance pour voter et participer 📸`);
+        await channel.send(`⚠️ **Le concours screenshot ferme** <t:${Math.floor(endsAt.getTime() / 1000)}:R> ! Dernière chance pour voter et participer 📸`);
         await supabase.from('contests').update({ warning_sent: true }).eq('id', contest.id);
         continue;
       }

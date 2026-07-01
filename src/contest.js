@@ -188,11 +188,15 @@ export async function closeContest(guild, guildConfig, contest, client) {
         const tiedAll = participations.filter(p => p.vote_count === topVotes);
         const tiedMentions = tiedAll.map(p => `<@${p.participants.discord_user_id}>`).join(', ');
 
+        const tiebreakLabel = TEST_MODE ? '30 minutes' : '24h';
         const embed = new EmbedBuilder()
-          .setTitle('⚖️ Égalité ! Le concours est prolongé.')
+          .setTitle('⚖️ Égalité détectée !')
           .setDescription(
-            `${tiedMentions} sont à égalité avec **${topVotes} ❤️**.\n\n` +
-            `Le concours est prolongé de **24h**. Votez pour départager ! Le concours se termine <t:${Math.floor(newEnd.getTime() / 1000)}:R>.`
+            `${tiedMentions} sont à égalité avec **${topVotes} ❤️**. Le concours est **prolongé de ${tiebreakLabel}** pour départager les concurrents !\n\n` +
+            `🗳️ Continuez à voter pour votre screenshot préféré — chaque vote compte !\n` +
+            `⏳ Nouveau délai de fermeture : <t:${Math.floor(newEnd.getTime() / 1000)}:R>\n` +
+            `🔄 Le vainqueur est vérifié **toutes les 30 secondes** — dès qu'un participant prend l'avantage, le concours se ferme immédiatement !\n\n` +
+            `*En cas d'égalité persistante à la fin du délai, le gagnant sera désigné par ancienneté de publication.*`
           )
           .setColor(0xff9900)
           .setTimestamp();
