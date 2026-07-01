@@ -94,10 +94,14 @@ async function testModeTickClose(client) {
         .limit(1)
         .single();
 
-      if (!contest) continue;
+      if (!contest) {
+        console.log(`[TICK] ${guild.name} — aucun concours actif`);
+        continue;
+      }
 
       const endsAt = new Date(contest.ends_at);
       const msLeft = endsAt - now;
+      console.log(`[TICK] ${guild.name} — concours ${contest.status} | temps restant: ${Math.round(msLeft / 1000)}s`);
 
       // Send 5-min warning if not already sent
       if (!contest.warning_sent && msLeft > 0 && msLeft <= 5 * 60000) {
@@ -107,13 +111,13 @@ async function testModeTickClose(client) {
         }
         await supabase.from('contests').update({ warning_sent: true }).eq('id', contest.id);
         await log(guild.id, 'contest_warning_sent', { contestId: contest.id });
+        console.log(`[TICK] Warning 5min envoyé`);
         continue;
       }
 
       if (now < endsAt) continue;
 
       if (contest.status === 'tiebreak') {
-        // Check if tie is resolved
         const { data: top2 } = await supabase
           .from('participations')
           .select('id, vote_count')
@@ -122,19 +126,27 @@ async function testModeTickClose(client) {
           .limit(2);
 
         const stillTied = top2?.length >= 2 && top2[0].vote_count === top2[1].vote_count;
-        if (stillTied) continue;
+        if (stillTied) {
+          console.log(`[TICK] Tiebreak toujours en cours — égalité à ${top2[0].vote_count} votes`);
+          continue;
+        }
+        console.log(`[TICK] Tiebreak résolu — fermeture en cours`);
       }
 
-      // Close the contest
+      console.log(`[TICK] Fermeture du concours en cours...`);
       const result = await closeContest(guild, guildConfig, contest, client);
 
-      // Only auto-reopen if contest truly closed (not just extended for tiebreak)
-      if (result?.tied) continue;
+      if (result?.tied) {
+        console.log(`[TICK] Tiebreak déclenché — réouverture annulée`);
+        continue;
+      }
 
       const reopenMs = TEST_REOPEN_DELAY_MINUTES * 60000;
+      console.log(`[TICK] Réouverture programmée dans ${TEST_REOPEN_DELAY_MINUTES} minutes`);
       setTimeout(async () => {
         try {
           await openContest(guild, guildConfig, contestSettings, client);
+          console.log(`[TICK] Concours réouvert sur ${guild.name}`);
           await log(guild.id, 'contest_auto_reopened', { guildName: guild.name });
         } catch (err) {
           await log(guild.id, 'test_reopen_failed', { error: err.message }, 'error');
@@ -142,6 +154,7 @@ async function testModeTickClose(client) {
       }, reopenMs);
 
     } catch (err) {
+      console.error(`[TICK] Erreur: ${err.message}`);
       await log(guild.id, 'test_tick_error', { error: err.message }, 'error');
     }
   }
