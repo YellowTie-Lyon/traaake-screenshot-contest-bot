@@ -13,6 +13,8 @@ const LOG_COLORS = {
 };
 
 const DISCORD_LOG_ACTIONS = new Set([
+  'bot_started',
+  'bot_stopped',
   'contest_opened',
   'contest_closed',
   'contest_no_entries',

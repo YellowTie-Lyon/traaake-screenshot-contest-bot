@@ -60,6 +60,9 @@ export async function connectBot(env) {
     watchContestChanges(client, env);
 
     await log(null, 'bot_connected', { environment: env.name, guilds: client.guilds.cache.size });
+    for (const guild of client.guilds.cache.values()) {
+      await log(guild.id, 'bot_started', { environment: env.name, tag: client.user.tag });
+    }
   });
 
   client.on(Events.GuildCreate, async guild => {
@@ -264,6 +267,9 @@ export async function disconnectBot(client, envName) {
       .eq('guild_id', guild.id);
   }
 
+  for (const guild of client.guilds.cache.values()) {
+    await log(guild.id, 'bot_stopped', { environment: envName });
+  }
   await log(null, 'bot_disconnected', { environment: envName });
   await client.destroy();
   console.log(`[BOT] Disconnected from Discord (env: ${envName})`);
