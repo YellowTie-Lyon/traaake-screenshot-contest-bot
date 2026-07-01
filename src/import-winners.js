@@ -5,6 +5,7 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits } from 'discord.js';
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 
 const CHANNEL_ID = '1085909421374312458';
 const ENVIRONMENT_ID = '22222222-2222-2222-2222-222222222222';
@@ -20,7 +21,7 @@ const SEASONS = {
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false } }
+  { auth: { persistSession: false }, realtime: { transport: ws } }
 );
 
 function getSeasonId(date) {
