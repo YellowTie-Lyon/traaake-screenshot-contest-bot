@@ -510,7 +510,7 @@ async function handleMonStats(interaction, guildConfig) {
 
   const { data: participant } = await supabase
     .from('participants')
-    .select('id, discord_display_name, win_count, participation_count')
+    .select('id, discord_display_name')
     .eq('discord_user_id', discordUserId)
     .single();
 
@@ -519,40 +519,46 @@ async function handleMonStats(interaction, guildConfig) {
     return;
   }
 
-  // Points de la saison en cours
   const { data: season } = await supabase
     .from('seasons')
     .select('id, name')
     .eq('is_active', true)
     .single();
 
-  let seasonPoints = 0;
-  if (season) {
-    const { data: ledger } = await supabase
-      .from('points_ledger')
-      .select('points')
-      .eq('participant_id', participant.id)
-      .eq('season_id', season.id);
-    seasonPoints = ledger?.reduce((sum, r) => sum + r.points, 0) ?? 0;
-  }
-
-  // Meilleur score (max votes sur une participation)
-  const { data: best } = await supabase
+  // All valid participations from closed contests
+  const { data: allParticipations } = await supabase
     .from('participations')
-    .select('vote_count')
+    .select('final_rank, vote_count, contests!inner(season_id, status)')
     .eq('participant_id', participant.id)
-    .order('vote_count', { ascending: false })
-    .limit(1)
-    .single();
+    .eq('contests.status', 'closed')
+    .eq('is_valid', true)
+    .not('final_rank', 'is', null);
+
+  const POINTS_MAP = { 1: 100, 2: 60, 3: 30 };
+  const PARTICIPATION_POINTS = 20;
+
+  let winCount = 0;
+  let participationCount = 0;
+  let seasonPoints = 0;
+  let bestVotes = 0;
+
+  for (const p of allParticipations ?? []) {
+    participationCount++;
+    if (p.final_rank === 1) winCount++;
+    if ((p.vote_count ?? 0) > bestVotes) bestVotes = p.vote_count ?? 0;
+    if (season && p.contests.season_id === season.id) {
+      seasonPoints += PARTICIPATION_POINTS + (POINTS_MAP[p.final_rank] ?? 0);
+    }
+  }
 
   const embed = new EmbedBuilder()
     .setTitle(`📊 Tes stats — ${participant.discord_display_name}`)
     .setColor(0x5865f2)
     .addFields(
-      { name: '🏆 Victoires', value: String(participant.win_count), inline: true },
-      { name: '📸 Participations', value: String(participant.participation_count), inline: true },
+      { name: '🏆 Victoires', value: String(winCount), inline: true },
+      { name: '📸 Participations', value: String(participationCount), inline: true },
       { name: `✨ Points ${season?.name ?? 'saison'}`, value: String(seasonPoints), inline: true },
-      { name: '❤️ Meilleur score', value: best ? `${best.vote_count} votes` : 'N/A', inline: true },
+      { name: '❤️ Meilleur score', value: bestVotes > 0 ? `${bestVotes} votes` : 'N/A', inline: true },
     )
     .addFields({ name: '📊 Classement complet', value: '[Voir sur traaake.fr](https://traaake.fr/)', inline: false })
     .setFooter({ text: 'Statistiques mises à jour en temps réel' })
