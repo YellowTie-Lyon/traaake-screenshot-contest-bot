@@ -116,16 +116,50 @@ async function testModeTickClose(client) {
       }
 
       if (contest.status === 'tiebreak') {
-        const { data: top2 } = await supabase
+        const { data: allTied } = await supabase
           .from('participations')
-          .select('id, vote_count')
+          .select('id, vote_count, participants(discord_user_id)')
           .eq('contest_id', contest.id)
-          .order('vote_count', { ascending: false })
-          .limit(2);
+          .order('vote_count', { ascending: false });
 
-        const stillTied = top2?.length >= 2 && top2[0].vote_count === top2[1].vote_count;
+        const topVotes = allTied?.[0]?.vote_count ?? 0;
+        const tiedNow = allTied?.filter(p => p.vote_count === topVotes) ?? [];
+        const stillTied = tiedNow.length >= 2;
+
         if (stillTied && now < endsAt) {
-          console.log(`[TICK] Tiebreak toujours en cours — égalité à ${top2[0].vote_count} votes`);
+          // Check if tiebreak participants changed — update message if so
+          const tiedIds = tiedNow.map(p => p.participants.discord_user_id).sort().join(',');
+          const lastTiedIds = contest.tiebreak_participants ?? '';
+          if (tiedIds !== lastTiedIds) {
+            console.log(`[TICK] Participants à égalité ont changé — mise à jour du message`);
+            const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
+            if (channel) {
+              // Delete old tiebreak message
+              if (contest.tiebreak_message_id) {
+                await channel.messages.delete(contest.tiebreak_message_id).catch(() => null);
+              }
+              const { EmbedBuilder } = await import('discord.js');
+              const tiebreakLabel = TEST_MODE ? '30 minutes' : '24h';
+              const tiedMentions = tiedNow.map(p => `<@${p.participants.discord_user_id}>`).join(', ');
+              const embed = new EmbedBuilder()
+                .setTitle('⚖️ Égalité détectée !')
+                .setDescription(
+                  `${tiedMentions} sont à égalité avec **${topVotes} ❤️**. Le concours est **prolongé de ${tiebreakLabel}** pour départager les concurrents !\n\n` +
+                  `🗳️ Continuez à voter pour votre screenshot préféré — chaque vote compte !\n` +
+                  `⏳ Nouveau délai de fermeture : <t:${Math.floor(new Date(contest.ends_at).getTime() / 1000)}:R>\n` +
+                  `🔄 Le vainqueur est vérifié **toutes les 30 secondes** — dès qu'un participant prend l'avantage, le concours se ferme immédiatement !\n\n` +
+                  `*En cas d'égalité persistante à la fin du délai, le gagnant sera désigné par ancienneté de publication.*`
+                )
+                .setColor(0xff9900)
+                .setTimestamp();
+              const newMsg = await channel.send({ embeds: [embed] });
+              await supabase.from('contests').update({
+                tiebreak_message_id: newMsg.id,
+                tiebreak_participants: tiedIds,
+              }).eq('id', contest.id);
+            }
+          }
+          console.log(`[TICK] Tiebreak toujours en cours — égalité à ${topVotes} votes (${tiedNow.length} participants)`);
           continue;
         }
         if (!stillTied) console.log(`[TICK] Tiebreak résolu — fermeture en cours`);
