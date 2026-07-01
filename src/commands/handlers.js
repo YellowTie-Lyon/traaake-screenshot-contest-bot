@@ -119,12 +119,21 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
       await interaction.reply({ content: 'Aucun concours actif à fermer.', flags: MessageFlags.Ephemeral });
       return;
     }
+    // Block manual close during active tiebreak period
+    if (activeContest.status === 'tiebreak' && new Date(activeContest.ends_at) > new Date()) {
+      const closeTimestamp = Math.floor(new Date(activeContest.ends_at).getTime() / 1000);
+      await interaction.reply({
+        content: `⚖️ Un tiebreak est en cours — le concours se fermera automatiquement <t:${closeTimestamp}:R>. Impossible de forcer la fermeture avant la fin du délai.`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const result = await closeContest(guild, guildConfig, activeContest, client);
     if (result?.noEntries) {
       await interaction.editReply('✅ Concours fermé — aucune participation cette semaine.');
     } else if (result?.tied) {
-      await interaction.editReply('⚖️ Égalité détectée — le concours est prolongé de 24h.');
+      await interaction.editReply('⚖️ Égalité détectée — le concours est prolongé d\'1h.');
     } else {
       await interaction.editReply('✅ Concours fermé et gagnants annoncés !');
     }
