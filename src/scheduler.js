@@ -17,8 +17,10 @@ export function startScheduler(client) {
     tasks.push(setInterval(() => testModeTickClose(client), intervalMs));
     console.log(`[SCHEDULER] TEST MODE — checking every ${TEST_TIEBREAK_CHECK_SECONDS}s, reminder every ${TEST_REMINDER_INTERVAL_MINUTES}min.`);
   } else {
-    // Check every minute if it's time to send the reminder (day+hour read from DB)
+    // Check every minute if it's time to send the vote reminder (day+hour read from DB)
     tasks.push(cron.schedule('* * * * *', () => checkReminderSchedule(client)));
+    // Daily promo classement at 18h every day except Wednesday (contest close day)
+    tasks.push(cron.schedule('0 18 * * 0,1,2,4,5,6', () => sendDailyPromo(client)));
   }
 
   console.log('[SCHEDULER] Started.');
@@ -302,6 +304,39 @@ async function sendContestReminder(client) {
       await log(guild.id, 'contest_reminder_sent', { contestId: contest.id });
     } catch (err) {
       await log(guild.id, 'reminder_error', { error: err.message }, 'error');
+    }
+  }
+}
+
+async function sendDailyPromo(client) {
+  const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const config = await getGuildConfig(guild.id);
+      if (!config) continue;
+      const { guildConfig } = config;
+
+      const { data: contest } = await supabase
+        .from('contests')
+        .select('id, promo_last_sent_date')
+        .eq('environment_id', guildConfig.environment_id)
+        .in('status', ['active', 'tiebreak'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!contest) continue;
+      if (contest.promo_last_sent_date === today) continue;
+
+      const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
+      if (!channel) continue;
+
+      await channel.send(`🏆 Le classement de la saison est disponible sur **[traaake.fr](https://traaake.fr/)** — viens voir où tu en es ! 📊`);
+      await supabase.from('contests').update({ promo_last_sent_date: today }).eq('id', contest.id);
+      await log(guild.id, 'contest_daily_promo_sent', { contestId: contest.id, date: today });
+      console.log(`[PROMO] Message classement envoyé (${today})`);
+    } catch (err) {
+      await log(guild.id, 'daily_promo_error', { error: err.message }, 'error');
     }
   }
 }

@@ -174,17 +174,19 @@ export async function handleScreenshotMessage(message, guildConfig, contest, con
   // Add ❤️ reaction as the vote emoji
   await message.react(VOTE_EMOJI);
 
-  // Every 2 participations, send a short promo message pointing to the leaderboard
-  const { count } = await supabase
-    .from('participations')
-    .select('id', { count: 'exact', head: true })
-    .eq('contest_id', contest.id);
+  // Send promo once after the 3rd participation
+  if (!contest.promo_after_3_sent) {
+    const { count } = await supabase
+      .from('participations')
+      .select('id', { count: 'exact', head: true })
+      .eq('contest_id', contest.id);
 
-  const promoInterval = contestSettings?.promo_interval ?? 5;
-  if (count && promoInterval > 0 && count % promoInterval === 0) {
-    await message.channel.send(
-      `🏆 Le classement de la saison est disponible sur **[traaake.fr](https://traaake.fr/)** — viens voir où tu en es ! 📊`
-    );
+    if (count >= 3) {
+      await message.channel.send(
+        `🏆 Le classement de la saison est disponible sur **[traaake.fr](https://traaake.fr/)** — viens voir où tu en es ! 📊`
+      );
+      await supabase.from('contests').update({ promo_after_3_sent: true }).eq('id', contest.id);
+    }
   }
 
   console.log(`[MSG] Participation acceptée — ${message.author.username} (${discordUserId})`);
