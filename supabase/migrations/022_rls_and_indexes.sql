@@ -5,16 +5,16 @@
 -- from the Supabase client-side dashboard or leaked keys.
 -- ============================================================
 
-alter table environments           enable row level security;
-alter table guild_configs          enable row level security;
-alter table contest_settings       enable row level security;
-alter table contests               enable row level security;
-alter table participants           enable row level security;
-alter table participations         enable row level security;
-alter table season_scores          enable row level security;
-alter table seasons                enable row level security;
-alter table contest_bans           enable row level security;
-alter table bot_logs               enable row level security;
+alter table environments             enable row level security;
+alter table discord_guild_configs    enable row level security;
+alter table contest_settings         enable row level security;
+alter table contests                 enable row level security;
+alter table participants             enable row level security;
+alter table participations           enable row level security;
+alter table seasons                  enable row level security;
+alter table contest_bans             enable row level security;
+alter table bot_logs                 enable row level security;
+alter table bot_commands             enable row level security;
 
 -- No policies = no access for anon/authenticated roles.
 -- Service role bypasses RLS entirely (Supabase behaviour).
@@ -27,20 +27,20 @@ alter table bot_logs               enable row level security;
 create index if not exists idx_contests_env_status
   on contests (environment_id, status);
 
--- Contests: close trigger queries ends_at
+-- Contests: cron close check queries ends_at on open/tiebreak contests
 create index if not exists idx_contests_ends_at
   on contests (ends_at)
-  where status in ('open', 'tiebreak');
+  where status in ('active', 'tiebreak');
 
 -- Participations: vote reaction handler hits (message_id, contest_id)
 create index if not exists idx_participations_message_contest
   on participations (message_id, contest_id);
 
--- Participations: duplicate-check and ranking hit (contest_id, participant_id)
+-- Participations: duplicate submission check and ranking
 create index if not exists idx_participations_contest_participant
   on participations (contest_id, participant_id);
 
--- Participations: leaderboard sort
+-- Participations: leaderboard sort by votes
 create index if not exists idx_participations_vote_count
   on participations (contest_id, vote_count desc);
 
@@ -48,14 +48,14 @@ create index if not exists idx_participations_vote_count
 create index if not exists idx_participants_discord_user_id
   on participants (discord_user_id);
 
--- Season scores: leaderboard hits environment_id
-create index if not exists idx_season_scores_env
-  on season_scores (environment_id, total_points desc);
-
--- Contest bans: checked on every submission
+-- Contest bans: checked on every message submission
 create index if not exists idx_contest_bans_env_user
   on contest_bans (environment_id, discord_user_id);
 
--- Bot logs: queried by guild_id for audit
-create index if not exists idx_bot_logs_guild_created
-  on bot_logs (guild_id, created_at desc);
+-- Bot logs: queried by environment_id for audit
+create index if not exists idx_bot_logs_env_created
+  on bot_logs (environment_id, created_at desc);
+
+-- Discord guild configs: looked up by guild_id on every event
+create index if not exists idx_discord_guild_configs_guild_id
+  on discord_guild_configs (guild_id);
