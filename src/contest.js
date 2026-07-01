@@ -3,6 +3,14 @@ import { log } from './logger.js';
 import { EmbedBuilder } from 'discord.js';
 import { TEST_MODE, TEST_CONTEST_DURATION_MINUTES, TEST_TIEBREAK_DURATION_MINUTES } from './test-mode.js';
 
+function formatDuration(hours) {
+  if (hours < 1) {
+    const mins = Math.round(hours * 60);
+    return `${mins} minute${mins > 1 ? 's' : ''}`;
+  }
+  return `${hours}h`;
+}
+
 const VOTE_EMOJI = '❤️';
 
 function getPointsMap(contestSettings) {
@@ -37,7 +45,9 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
   const startDate = new Date();
   const endDate = TEST_MODE
     ? new Date(Date.now() + TEST_CONTEST_DURATION_MINUTES * 60000)
-    : nextWednesdayAt18();
+    : contestSettings?.contest_duration_minutes
+      ? new Date(Date.now() + contestSettings.contest_duration_minutes * 60000)
+      : nextWednesdayAt18();
 
   const { data: contest, error } = await supabase
     .from('contests')
@@ -214,7 +224,9 @@ export async function closeContest(guild, guildConfig, contest, client) {
     } else {
       // First tie detected → extend (configurable via contest_settings, test mode overrides)
       const tiebreakHours = contestSettings?.tiebreak_duration_hours ?? 24;
-      const tiebreakMs = TEST_MODE ? TEST_TIEBREAK_DURATION_MINUTES * 60000 : tiebreakHours * 3600000;
+      const tiebreakMs = TEST_MODE
+        ? TEST_TIEBREAK_DURATION_MINUTES * 60000
+        : tiebreakHours * 3600000;
       const newEnd = new Date(Date.now() + tiebreakMs);
       await supabase.from('contests').update({ ends_at: newEnd.toISOString(), status: 'tiebreak' }).eq('id', contest.id);
 
@@ -224,7 +236,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
         const tiedAll = participations.filter(p => p.vote_count === topVotes);
         const tiedMentions = tiedAll.map(p => `<@${p.participants.discord_user_id}>`).join(', ');
 
-        const tiebreakLabel = TEST_MODE ? `${TEST_TIEBREAK_DURATION_MINUTES} minutes` : `${tiebreakHours}h`;
+        const tiebreakLabel = TEST_MODE ? `${TEST_TIEBREAK_DURATION_MINUTES} minutes` : formatDuration(tiebreakHours);
         const embed = new EmbedBuilder()
           .setTitle('⚖️ Égalité détectée !')
           .setDescription(
