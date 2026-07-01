@@ -17,8 +17,8 @@ export function startScheduler(client) {
     tasks.push(setInterval(() => testModeTickClose(client), intervalMs));
     console.log(`[SCHEDULER] TEST MODE — checking every ${TEST_TIEBREAK_CHECK_SECONDS}s.`);
   } else {
-    // Reminder every Monday at 18:00
-    tasks.push(cron.schedule('0 18 * * 1', () => sendContestReminder(client)));
+    // Reminder every 15 minutes if a contest is active
+    tasks.push(cron.schedule('*/15 * * * *', () => sendContestReminder(client)));
   }
 
   console.log('[SCHEDULER] Started.');
