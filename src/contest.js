@@ -27,11 +27,18 @@ function getParticipationPoints(contestSettings) {
 
 function nextWednesdayAt1758() {
   const now = new Date();
-  const result = new Date(now);
-  const daysUntilWed = (3 - now.getDay() + 7) % 7 || 7; // at least 1 day ahead
-  result.setDate(now.getDate() + daysUntilWed);
-  result.setHours(17, 58, 0, 0);
-  return result;
+  const daysUntilWed = (3 - now.getDay() + 7) % 7 || 7;
+  const nextWed = new Date(now);
+  nextWed.setDate(now.getDate() + daysUntilWed);
+
+  // Get the date string in Paris timezone (YYYY-MM-DD)
+  const parisDateStr = nextWed.toLocaleDateString('sv', { timeZone: 'Europe/Paris' });
+
+  // Build a naive UTC date at 17:58Z, then adjust by the actual Paris offset
+  const naiveUTC = new Date(`${parisDateStr}T17:58:00Z`);
+  const parisHour = +naiveUTC.toLocaleString('en', { timeZone: 'Europe/Paris', hour: 'numeric', hour12: false });
+  const offsetMs = (parisHour - 17) * 3600 * 1000;
+  return new Date(naiveUTC.getTime() - offsetMs);
 }
 
 export async function openContest(guild, guildConfig, contestSettings, client, theme = null) {
