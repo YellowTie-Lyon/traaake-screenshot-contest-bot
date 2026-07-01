@@ -90,7 +90,12 @@ export async function handleInteraction(interaction, client) {
 }
 
 async function handleContestCommand(interaction, guildConfig, contestSettings, isAdmin, client) {
-  const sub = interaction.options.getSubcommand();
+  const sub = interaction.options.getSubcommand(false);
+
+  if (!sub) {
+    await interaction.reply({ content: 'Précise une sous-commande.', flags: MessageFlags.Ephemeral });
+    return;
+  }
 
   if (sub !== 'status' && !isAdmin) {
     await interaction.reply({ content: 'Tu dois avoir le rôle admin pour cette commande.', flags: MessageFlags.Ephemeral });
@@ -542,7 +547,7 @@ async function handlePoints(interaction, guildConfig, isAdmin) {
     return;
   }
 
-  const sub = interaction.options.getSubcommand();
+  const sub = interaction.options.getSubcommand(false);
   const target = interaction.options.getUser('membre');
   const amount = interaction.options.getInteger('points');
   const reason = (interaction.options.getString('raison') ?? '').slice(0, 256) || null;
