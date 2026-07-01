@@ -179,13 +179,11 @@ async function testModeTickClose(client) {
       const reopenMs = TEST_REOPEN_DELAY_MINUTES * 60000;
       console.log(`[TICK] Réouverture programmée dans ${TEST_REOPEN_DELAY_MINUTES} minutes`);
 
-      // Lock the contest channel and announce the reopen delay
+      // Announce the reopen delay in the contest channel
       const contestChannel = guild.channels.cache.get(guildConfig.contest_channel_id);
       if (contestChannel) {
-        await contestChannel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false }).catch(() => null);
         const reopenTimestamp = Math.floor((Date.now() + reopenMs) / 1000);
         await contestChannel.send(`🔒 Le salon est temporairement fermé. Le prochain concours screenshot ouvrira <t:${reopenTimestamp}:R> — préparez vos plus beaux clichés ! 📸`).catch(() => null);
-        console.log(`[TICK] Salon verrouillé pendant ${TEST_REOPEN_DELAY_MINUTES} minutes`);
       }
 
       setTimeout(async () => {
@@ -200,10 +198,6 @@ async function testModeTickClose(client) {
 
           if (existing) {
             console.log(`[TICK] Réouverture annulée — un concours est déjà en cours`);
-            // Still unlock the channel in case it was locked
-            if (contestChannel) {
-              await contestChannel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: null }).catch(() => null);
-            }
             return;
           }
 

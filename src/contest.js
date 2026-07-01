@@ -50,9 +50,6 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
 
   const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
   if (channel) {
-    // Unlock channel in case it was locked during the reopen delay
-    await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: null }).catch(() => null);
-
     const startLabel = startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const endLabel   = endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const closeTimestamp = Math.floor(endDate.getTime() / 1000);
