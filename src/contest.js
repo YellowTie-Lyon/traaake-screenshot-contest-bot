@@ -66,6 +66,7 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
       theme: theme,
       started_at: startDate.toISOString(),
       ends_at: endDate.toISOString(),
+      original_ends_at: endDate.toISOString(),
     })
     .select()
     .single();
@@ -321,7 +322,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
   if (channel) {
     const winner = participations[0];
     const startLabel = new Date(contest.started_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-    const endLabel   = new Date(contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const endLabel   = new Date(contest.original_ends_at ?? contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
     const pts = (i) => PARTICIPATION_POINTS + (POINTS_MAP[i + 1] ?? 0);
     let podium = `🥇 <@${winner.participants.discord_user_id}> — **${winner.vote_count} ❤️** +${pts(0)} pts`;
