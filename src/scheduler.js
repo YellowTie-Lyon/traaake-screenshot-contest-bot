@@ -185,11 +185,14 @@ async function testModeTickClose(client) {
       const reopenMs = TEST_REOPEN_DELAY_MINUTES * 60000;
       console.log(`[TICK] Réouverture programmée dans ${TEST_REOPEN_DELAY_MINUTES} minutes`);
 
-      // Announce the reopen delay in the contest channel
+      // Announce the reopen delay in the contest channel and store message ID for cleanup
       const contestChannel = guild.channels.cache.get(guildConfig.contest_channel_id);
       if (contestChannel) {
         const reopenTimestamp = Math.floor((Date.now() + reopenMs) / 1000);
-        await contestChannel.send(`🔒 Le salon est temporairement fermé. Le prochain concours screenshot ouvrira <t:${reopenTimestamp}:R> — préparez vos plus beaux clichés ! 📸`).catch(() => null);
+        const reopenMsg = await contestChannel.send(`🔒 Le salon est temporairement fermé. Le prochain concours screenshot ouvrira <t:${reopenTimestamp}:R> — préparez vos plus beaux clichés ! 📸`).catch(() => null);
+        if (reopenMsg) {
+          await supabase.from('contests').update({ reopen_message_id: reopenMsg.id }).eq('id', contest.id);
+        }
       }
 
       setTimeout(async () => {

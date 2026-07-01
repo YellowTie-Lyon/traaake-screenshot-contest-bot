@@ -60,6 +60,20 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
 
   const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
   if (channel) {
+    // Delete the "salon temporairement fermé" message from the previous contest if any
+    const { data: prevContest } = await supabase
+      .from('contests')
+      .select('reopen_message_id')
+      .eq('environment_id', environmentId)
+      .eq('status', 'closed')
+      .not('reopen_message_id', 'is', null)
+      .order('closed_at', { ascending: false })
+      .limit(1)
+      .single();
+    if (prevContest?.reopen_message_id) {
+      await channel.messages.delete(prevContest.reopen_message_id).catch(() => null);
+    }
+
     const startLabel = startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const endLabel   = endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const closeTimestamp = Math.floor(endDate.getTime() / 1000);
