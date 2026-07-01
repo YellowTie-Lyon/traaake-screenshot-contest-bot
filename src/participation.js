@@ -90,6 +90,15 @@ export async function handleScreenshotMessage(message, guildConfig, contest, con
     return false;
   }
 
+  // Tiebreak en cours — plus de nouvelles participations
+  if (contest.status === 'tiebreak') {
+    await message.delete().catch(() => null);
+    await sendDM(message.author,
+      `⚖️ **Le concours est en période de départage** — les nouvelles participations ne sont plus acceptées. Le gagnant sera annoncé très prochainement !`
+    );
+    return false;
+  }
+
   const discordUserId = message.author.id;
   const guildId = message.guildId;
 
