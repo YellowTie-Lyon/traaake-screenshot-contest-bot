@@ -3,10 +3,12 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
+import ws from 'ws';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { realtime: { transport: ws } },
 );
 
 const ENVIRONMENT_ID = process.env.ENVIRONMENT_ID;
