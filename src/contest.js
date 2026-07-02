@@ -12,6 +12,26 @@ function formatDuration(hours) {
 
 const VOTE_EMOJI = '❤️';
 
+async function uploadWinnerImage(imageUrl, participationId) {
+  try {
+    const res = await fetch(imageUrl);
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') ?? 'image/png';
+    const ext = contentType.includes('jpeg') ? 'jpg' : contentType.includes('webp') ? 'webp' : 'png';
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const path = `${participationId}.${ext}`;
+    const { error } = await supabase.storage.from('winners').upload(path, buffer, {
+      contentType,
+      upsert: true,
+    });
+    if (error) return null;
+    const { data } = supabase.storage.from('winners').getPublicUrl(path);
+    return data.publicUrl;
+  } catch {
+    return null;
+  }
+}
+
 function getPointsMap(contestSettings) {
   return {
     1: contestSettings?.points_1st ?? 100,
@@ -286,11 +306,18 @@ export async function closeContest(guild, guildConfig, contest, client) {
     const podiumBonus = POINTS_MAP[rank] ?? 0;
     const total = PARTICIPATION_POINTS + podiumBonus;
 
+    // Upload winner image to Supabase Storage for permanent hosting
+    let permanentImageUrl = participation.image_url;
+    if (rank === 1 && participation.image_url) {
+      permanentImageUrl = await uploadWinnerImage(participation.image_url, participation.id) ?? participation.image_url;
+    }
+
     // Set final_rank and is_winner on participation
     await supabase.from('participations').update({
       final_rank: rank,
       is_winner: rank === 1,
       is_valid: true,
+      ...(rank === 1 ? { image_url: permanentImageUrl } : {}),
     }).eq('id', participation.id);
 
     await supabase.from('points_ledger').insert({
