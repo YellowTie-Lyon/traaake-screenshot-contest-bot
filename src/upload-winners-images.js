@@ -11,7 +11,7 @@ const supabase = createClient(
   { realtime: { transport: ws } },
 );
 
-const ENVIRONMENT_ID = process.env.ENVIRONMENT_ID;
+const ENVIRONMENT_ID = process.env.ENVIRONMENT_ID ?? process.env.ENVIRONMENT_ID_PROD;
 const CONTEST_CHANNEL_ID = '1085909421374312458';
 
 async function uploadImage(imageUrl, participationId) {
