@@ -40,6 +40,11 @@ export const commands = [
     )
     .addSubcommand(sub =>
       sub.setName('bans').setDescription('Lister les membres exclus du concours (admin)')
+    )
+    .addSubcommand(sub =>
+      sub.setName('purge')
+        .setDescription('Supprimer définitivement un membre du classement et des gagnants (admin)')
+        .addUserOption(opt => opt.setName('membre').setDescription('Membre à supprimer').setRequired(true))
     ),
 
   new SlashCommandBuilder()

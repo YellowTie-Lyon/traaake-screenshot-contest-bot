@@ -147,6 +147,9 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
   } else if (sub === 'bans') {
     await handleBans(interaction, guildConfig, isAdmin);
 
+  } else if (sub === 'purge') {
+    await handlePurgeMember(interaction, guildConfig, isAdmin);
+
   } else if (sub === 'status') {
     if (!activeContest) {
       await interaction.reply({ content: 'Aucun concours actif en ce moment.', flags: MessageFlags.Ephemeral });
@@ -638,4 +641,39 @@ async function handlePoints(interaction, guildConfig, isAdmin) {
     `${emoji} **${points > 0 ? '+' : ''}${points} points** attribués à **${participant.discord_display_name}**${reason ? ` — *${reason}*` : ''}.`
   );
   await log(guildConfig.guild_id, `points_${sub}`, { targetId: target.id, points, reason, by: interaction.user.id });
+}
+
+async function handlePurgeMember(interaction, guildConfig, isAdmin) {
+  if (!isAdmin) {
+    await interaction.reply({ content: 'Commande réservée aux admins.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const target = interaction.options.getUser('membre');
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const { data: participant } = await supabase
+    .from('participants')
+    .select('id, discord_display_name')
+    .eq('discord_user_id', target.id)
+    .single();
+
+  if (!participant) {
+    await interaction.editReply(`❌ **${target.username}** n'a aucune participation enregistrée.`);
+    return;
+  }
+
+  // Delete all participations (cascades points_ledger if FK set, else delete manually)
+  await supabase.from('points_ledger').delete().eq('participant_id', participant.id);
+  await supabase.from('participations').delete().eq('participant_id', participant.id);
+  await supabase.from('contest_bans').delete().eq('discord_user_id', target.id);
+  await supabase.from('participants').delete().eq('id', participant.id);
+
+  await log(guildConfig.guild_id, 'member_purged', {
+    targetId: target.id,
+    targetUsername: participant.discord_display_name,
+    by: interaction.user.id,
+  });
+
+  await interaction.editReply(`✅ **${participant.discord_display_name}** a été définitivement supprimé du classement et des gagnants.`);
 }

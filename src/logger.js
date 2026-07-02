@@ -28,6 +28,7 @@ const DISCORD_LOG_ACTIONS = new Set([
   'participation_insert_failed',
   'participant_upsert_failed',
   'points_adjusted',
+  'member_purged',
 ]);
 
 export async function log(guildId, action, details = {}, level = 'info') {
