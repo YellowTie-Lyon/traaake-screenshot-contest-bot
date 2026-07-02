@@ -1,9 +1,8 @@
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { getGuildConfig, getActiveContest, invalidateCache } from '../config.js';
 import { openContest, closeContest } from '../contest.js';
 import { log } from '../logger.js';
 import { supabase } from '../supabase.js';
-import { checkContests } from '../scheduler.js';
 
 // Rate limiting: max 2 uses per user per 30s for public commands
 const rateLimitMap = new Map();
@@ -33,7 +32,7 @@ export async function handleInteraction(interaction, client) {
   const config = await getGuildConfig(guildId);
 
   if (!config) {
-    await interaction.reply({ content: 'Ce serveur n\'est pas configuré dans Supabase.', ephemeral: true });
+    await interaction.reply({ content: 'Ce serveur n\'est pas configuré dans Supabase.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -41,7 +40,7 @@ export async function handleInteraction(interaction, client) {
 
   // Rate limiting for public commands
   if (isRateLimited(interaction.user.id, interaction.commandName)) {
-    await interaction.reply({ content: '⏳ Tu utilises cette commande trop souvent. Réessaie dans quelques secondes.', ephemeral: true });
+    await interaction.reply({ content: '⏳ Tu utilises cette commande trop souvent. Réessaie dans quelques secondes.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -49,36 +48,56 @@ export async function handleInteraction(interaction, client) {
   const isAdmin = interaction.member.roles.cache.has(guildConfig.admin_role_id)
     || interaction.member.permissions.has('Administrator');
 
-  switch (interaction.commandName) {
-    case 'contest':
-      await handleContestCommand(interaction, guildConfig, contestSettings, isAdmin, client);
-      break;
-    case 'classement':
-      await handleLeaderboard(interaction, guildConfig);
-      break;
-    case 'syncconfig':
-      await handleSyncConfig(interaction, guildId, isAdmin);
-      break;
-    case 'reset':
-      await handleReset(interaction, guildConfig, isAdmin);
-      break;
-    case 'purge':
-      await handlePurge(interaction, guildConfig, isAdmin);
-      break;
-    case 'monstats':
-      await handleMonStats(interaction, guildConfig);
-      break;
-    case 'points':
-      await handlePoints(interaction, guildConfig, isAdmin);
-      break;
+  const sub = interaction.options.getSubcommand?.(false) ?? '';
+  console.log(`[CMD] /${interaction.commandName}${sub ? ` ${sub}` : ''} — ${interaction.user.username} (${interaction.user.id})`);
+
+  try {
+    switch (interaction.commandName) {
+      case 'contest':
+        await handleContestCommand(interaction, guildConfig, contestSettings, isAdmin, client);
+        break;
+      case 'classement':
+        await handleLeaderboard(interaction, guildConfig);
+        break;
+      case 'syncconfig':
+        await handleSyncConfig(interaction, guildId, isAdmin);
+        break;
+      case 'reset':
+        await handleReset(interaction, guildConfig, isAdmin);
+        break;
+      case 'purge':
+        await handlePurge(interaction, guildConfig, isAdmin);
+        break;
+      case 'monstats':
+        await handleMonStats(interaction, guildConfig);
+        break;
+      case 'points':
+        await handlePoints(interaction, guildConfig, isAdmin);
+        break;
+    }
+  } catch (err) {
+    console.error(`[CMD] Erreur non gérée dans /${interaction.commandName}: ${err.message}`);
+    try {
+      const msg = `❌ Une erreur est survenue : ${err.message}`;
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(msg);
+      } else {
+        await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
+      }
+    } catch { /* interaction may have expired */ }
   }
 }
 
 async function handleContestCommand(interaction, guildConfig, contestSettings, isAdmin, client) {
-  const sub = interaction.options.getSubcommand();
+  const sub = interaction.options.getSubcommand(false);
+
+  if (!sub) {
+    await interaction.reply({ content: 'Précise une sous-commande.', flags: MessageFlags.Ephemeral });
+    return;
+  }
 
   if (sub !== 'status' && !isAdmin) {
-    await interaction.reply({ content: 'Tu dois avoir le rôle admin pour cette commande.', ephemeral: true });
+    await interaction.reply({ content: 'Tu dois avoir le rôle admin pour cette commande.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -87,32 +106,37 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
 
   if (sub === 'open') {
     if (activeContest) {
-      await interaction.reply({ content: 'Un concours est déjà en cours.', ephemeral: true });
+      await interaction.reply({ content: 'Un concours est déjà en cours.', flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.deferReply({ ephemeral: true });
-    const contest = await openContest(guild, guildConfig, contestSettings, client);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const theme = (interaction.options.getString('thème') ?? '').slice(0, 100) || null;
+    const contest = await openContest(guild, guildConfig, contestSettings, client, theme);
     await interaction.editReply(contest ? '✅ Concours ouvert !' : '❌ Erreur lors de l\'ouverture.');
 
   } else if (sub === 'close') {
     if (!activeContest) {
-      await interaction.reply({ content: 'Aucun concours actif à fermer.', ephemeral: true });
+      await interaction.reply({ content: 'Aucun concours actif à fermer.', flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.deferReply({ ephemeral: true });
+    // Block manual close during active tiebreak period
+    if (activeContest.status === 'tiebreak' && new Date(activeContest.ends_at) > new Date()) {
+      const closeTimestamp = Math.floor(new Date(activeContest.ends_at).getTime() / 1000);
+      await interaction.reply({
+        content: `⚖️ Un tiebreak est en cours — le concours se fermera automatiquement <t:${closeTimestamp}:R>. Impossible de forcer la fermeture avant la fin du délai.`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const result = await closeContest(guild, guildConfig, activeContest, client);
     if (result?.noEntries) {
       await interaction.editReply('✅ Concours fermé — aucune participation cette semaine.');
     } else if (result?.tied) {
-      await interaction.editReply('⚖️ Égalité détectée — le concours est prolongé de 24h.');
+      await interaction.editReply('⚖️ Égalité détectée — le concours est prolongé d\'1h.');
     } else {
       await interaction.editReply('✅ Concours fermé et gagnants annoncés !');
     }
-
-  } else if (sub === 'check') {
-    await interaction.deferReply({ ephemeral: true });
-    await checkContests(client);
-    await interaction.editReply('✅ Vérification des votes effectuée.');
 
   } else if (sub === 'ban') {
     await handleBan(interaction, guildConfig, isAdmin);
@@ -125,7 +149,7 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
 
   } else if (sub === 'status') {
     if (!activeContest) {
-      await interaction.reply({ content: 'Aucun concours actif en ce moment.', ephemeral: true });
+      await interaction.reply({ content: 'Aucun concours actif en ce moment.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -152,12 +176,12 @@ async function handleContestCommand(interaction, guildConfig, contestSettings, i
       });
     }
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
+    await interaction.reply({ embeds: [embed],  });
   }
 }
 
 async function handleLeaderboard(interaction, guildConfig) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const { data: season } = await supabase
     .from('seasons')
@@ -170,27 +194,48 @@ async function handleLeaderboard(interaction, guildConfig) {
     return;
   }
 
-  const { data: ledger } = await supabase
-    .from('points_ledger')
-    .select('points, participants(discord_username, discord_user_id)')
-    .eq('season_id', season.id);
+  // Points calculated from final_rank (same formula as website)
+  // rank1=120, rank2=80, rank3=50, other=20
+  const POINTS_MAP = { 1: 100, 2: 60, 3: 30 };
+  const PARTICIPATION_POINTS = 20;
 
-  if (!ledger || ledger.length === 0) {
-    await interaction.editReply('Aucun point attribué cette saison.');
+  const { data: seasonContests } = await supabase
+    .from('contests')
+    .select('id')
+    .eq('season_id', season.id)
+    .eq('status', 'closed');
+
+  const contestIds = (seasonContests ?? []).map(c => c.id);
+  if (!contestIds.length) {
+    await interaction.editReply('Aucun résultat cette saison.');
     return;
   }
 
-  // Aggregate points per participant
+  const { data: participations } = await supabase
+    .from('participations')
+    .select('final_rank, participant_id, participants(discord_username, discord_user_id)')
+    .in('contest_id', contestIds)
+    .eq('is_valid', true)
+    .not('final_rank', 'is', null);
+
+  if (!participations || participations.length === 0) {
+    await interaction.editReply('Aucun résultat cette saison.');
+    return;
+  }
+
   const totals = new Map();
-  for (const entry of ledger) {
-    const key = entry.participants.discord_user_id;
-    totals.set(key, {
-      username: entry.participants.discord_username,
-      points: (totals.get(key)?.points ?? 0) + entry.points,
+  for (const p of participations) {
+    const userId = p.participants.discord_user_id;
+    const pts = PARTICIPATION_POINTS + (POINTS_MAP[p.final_rank] ?? 0);
+    const current = totals.get(userId);
+    totals.set(userId, {
+      username: p.participants.discord_username,
+      points: (current?.points ?? 0) + pts,
+      wins: (current?.wins ?? 0) + (p.final_rank === 1 ? 1 : 0),
     });
   }
 
-  const sorted = [...totals.values()].sort((a, b) => b.points - a.points).slice(0, 10);
+  const sorted = [...totals.values()].sort((a, b) => b.points - a.points || b.wins - a.wins).slice(0, 10);
   const medals = ['🥇', '🥈', '🥉'];
 
   const embed = new EmbedBuilder()
@@ -199,28 +244,26 @@ async function handleLeaderboard(interaction, guildConfig) {
     .setDescription(
       sorted.map((e, i) => `${medals[i] ?? `${i + 1}.`} **${e.username}** — ${e.points} pts`).join('\n')
     )
-    .addFields({ name: '📊 Classement complet', value: '[Voir le classement complet sur trakr.fr](https://trakr.fr)', inline: false })
+    .addFields({ name: '📊 Classement complet', value: '[Voir le classement complet sur traaake.fr](https://traaake.fr/)', inline: false })
     .setFooter({ text: 'Classement mis à jour en temps réel • /monstats pour voir tes statistiques personnelles' })
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
-  const reply = await interaction.fetchReply().catch(() => null);
-  if (reply) setTimeout(() => reply.delete().catch(() => null), 10_000);
 }
 
 async function handleReset(interaction, guildConfig, isAdmin) {
   if (!isAdmin) {
-    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    await interaction.reply({ content: 'Commande réservée aux admins.', flags: MessageFlags.Ephemeral });
     return;
   }
 
   const confirmation = interaction.options.getString('confirmation');
   if (confirmation !== 'CONFIRMER') {
-    await interaction.reply({ content: '❌ Tapez exactement `CONFIRMER` pour valider le reset.', ephemeral: true });
+    await interaction.reply({ content: '❌ Tapez exactement `CONFIRMER` pour valider le reset.', flags: MessageFlags.Ephemeral });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const environmentId = guildConfig.environment_id;
   const guild = interaction.guild;
@@ -244,11 +287,24 @@ async function handleReset(interaction, guildConfig, isAdmin) {
     }
   }
 
-  // Delete points, participations and reset winner data for all contests
+  // Fetch active season only
+  const { data: activeSeason } = await supabase
+    .from('seasons')
+    .select('id, name')
+    .eq('is_active', true)
+    .single();
+
+  if (!activeSeason) {
+    await interaction.editReply('❌ Aucune saison active trouvée — reset annulé.');
+    return;
+  }
+
+  // Only touch contests from the active season
   const { data: contests } = await supabase
     .from('contests')
     .select('id')
-    .eq('environment_id', environmentId);
+    .eq('environment_id', environmentId)
+    .eq('season_id', activeSeason.id);
 
   if (contests?.length) {
     const contestIds = contests.map(c => c.id);
@@ -258,37 +314,31 @@ async function handleReset(interaction, guildConfig, isAdmin) {
       .in('id', contestIds);
     await supabase.from('points_ledger').delete().in('contest_id', contestIds);
     await supabase.from('participations').delete().in('contest_id', contestIds);
+    await supabase.from('contests').delete().in('id', contestIds);
   }
 
-  // Delete all remaining points_ledger entries (historical imports without contest_id)
-  await supabase.from('points_ledger').delete().is('contest_id', null);
+  // Reset win_count and participation_count on all participants
+  await supabase.from('participants')
+    .update({ win_count: 0, participation_count: 0 })
+    .neq('id', '00000000-0000-0000-0000-000000000000');
 
-  // Delete participants
-  await supabase.from('participants').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-  // Close active contest if any
-  await supabase.from('contests')
-    .update({ status: 'closed', closed_at: new Date().toISOString() })
-    .eq('environment_id', environmentId)
-    .in('status', ['active', 'tiebreak']);
-
-  await log(guildConfig.guild_id, 'leaderboard_reset', { triggeredBy: interaction.user.id });
-  await interaction.editReply('✅ Classement remis à zéro — points, participations, membres, votes et gagnants supprimés.');
+  await log(guildConfig.guild_id, 'leaderboard_reset', { triggeredBy: interaction.user.id, season: activeSeason.name });
+  await interaction.editReply(`✅ Classement **${activeSeason.name}** remis à zéro — participations, votes et gagnants de la saison supprimés. Les années précédentes sont conservées.`);
 }
 
 function parseDuration(str) {
-  if (!str) return null;
-  const match = str.match(/^(\d+)(j|d|h)$/i);
+  if (!str || str === 'permanent') return null;
+  const match = str.match(/^(\d+)(j|d|h|m)$/i);
   if (!match) return null;
   const amount = parseInt(match[1]);
   const unit = match[2].toLowerCase();
-  const ms = unit === 'h' ? amount * 3600000 : amount * 86400000;
+  const ms = unit === 'h' ? amount * 3600000 : unit === 'm' ? amount * 60000 : amount * 86400000;
   return new Date(Date.now() + ms);
 }
 
 async function handleBan(interaction, guildConfig, isAdmin) {
   if (!isAdmin) {
-    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    await interaction.reply({ content: 'Commande réservée aux admins.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -310,20 +360,59 @@ async function handleBan(interaction, guildConfig, isAdmin) {
     { onConflict: 'environment_id,discord_user_id' }
   );
 
+  // Remove active participation if a contest is currently running
+  const activeContest = await getActiveContest(guildConfig.environment_id);
+  let participationRemoved = false;
+  if (activeContest) {
+    const { data: participant } = await supabase
+      .from('participants')
+      .select('id')
+      .eq('discord_user_id', target.id)
+      .single();
+
+    if (participant) {
+      const { data: participation } = await supabase
+        .from('participations')
+        .select('id, message_id')
+        .eq('participant_id', participant.id)
+        .eq('contest_id', activeContest.id)
+        .single();
+
+      if (participation) {
+        // Delete the message from Discord
+        const channel = interaction.guild.channels.cache.get(guildConfig.contest_channel_id);
+        if (channel && participation.message_id) {
+          await channel.messages.delete(participation.message_id).catch(() => null);
+        }
+        // Delete from DB
+        await supabase.from('participations').delete().eq('id', participation.id);
+        participationRemoved = true;
+      }
+    }
+  }
+
   const expiry = expiresAt
     ? `jusqu'au <t:${Math.floor(expiresAt.getTime() / 1000)}:F>`
     : 'définitivement';
 
+  try {
+    const dm = await target.createDM();
+    await dm.send(
+      `🚫 **Tu es exclu du concours screenshot** ${expiry}.\n` +
+      (reason ? `**Raison :** ${reason}` : '')
+    );
+  } catch { /* DMs may be closed */ }
+
   await interaction.reply({
-    content: `🚫 **${target.username}** est exclu du concours ${expiry}${reason ? ` — *${reason}*` : ''}.`,
-    ephemeral: true,
+    content: `🚫 **${target.username}** est exclu du concours ${expiry}${reason ? ` — *${reason}*` : ''}${participationRemoved ? '\n🗑️ Sa participation en cours a été supprimée.' : ''}.`,
+    flags: MessageFlags.Ephemeral,
   });
-  await log(guildConfig.guild_id, 'contest_ban', { targetId: target.id, reason, expiresAt, bannedBy: interaction.user.id });
+  await log(guildConfig.guild_id, 'contest_ban', { targetId: target.id, reason, expiresAt, bannedBy: interaction.user.id, participationRemoved });
 }
 
 async function handleUnban(interaction, guildConfig, isAdmin) {
   if (!isAdmin) {
-    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    await interaction.reply({ content: 'Commande réservée aux admins.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -336,17 +425,17 @@ async function handleUnban(interaction, guildConfig, isAdmin) {
     .eq('discord_user_id', target.id);
 
   if (error) {
-    await interaction.reply({ content: `❌ Erreur : ${error.message}`, ephemeral: true });
+    await interaction.reply({ content: `❌ Erreur : ${error.message}`, flags: MessageFlags.Ephemeral });
     return;
   }
 
-  await interaction.reply({ content: `✅ **${target.username}** peut à nouveau participer au concours.`, ephemeral: true });
+  await interaction.reply({ content: `✅ **${target.username}** peut à nouveau participer au concours.`, flags: MessageFlags.Ephemeral });
   await log(guildConfig.guild_id, 'contest_unban', { targetId: target.id, unbannedBy: interaction.user.id });
 }
 
 async function handleBans(interaction, guildConfig, isAdmin) {
   if (!isAdmin) {
-    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    await interaction.reply({ content: 'Commande réservée aux admins.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -359,7 +448,7 @@ async function handleBans(interaction, guildConfig, isAdmin) {
     .order('banned_at', { ascending: false });
 
   if (!bans?.length) {
-    await interaction.reply({ content: 'Aucun membre exclu en ce moment.', ephemeral: true });
+    await interaction.reply({ content: 'Aucun membre exclu en ce moment.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -374,32 +463,32 @@ async function handleBans(interaction, guildConfig, isAdmin) {
     )
     .setTimestamp();
 
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
 async function handleSyncConfig(interaction, guildId, isAdmin) {
   if (!isAdmin) {
-    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    await interaction.reply({ content: 'Commande réservée aux admins.', flags: MessageFlags.Ephemeral });
     return;
   }
   invalidateCache(guildId);
-  await interaction.reply({ content: '✅ Configuration rechargée depuis Supabase.', ephemeral: true });
+  await interaction.reply({ content: '✅ Configuration rechargée depuis Supabase.', flags: MessageFlags.Ephemeral });
   await log(guildId, 'config_synced_manually', { triggeredBy: interaction.user.id });
 }
 
 async function handlePurge(interaction, guildConfig, isAdmin) {
   if (!isAdmin) {
-    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    await interaction.reply({ content: 'Commande réservée aux admins.', flags: MessageFlags.Ephemeral });
     return;
   }
 
   const channel = interaction.guild.channels.cache.get(guildConfig.contest_channel_id);
   if (!channel) {
-    await interaction.reply({ content: '❌ Salon concours introuvable.', ephemeral: true });
+    await interaction.reply({ content: '❌ Salon concours introuvable.', flags: MessageFlags.Ephemeral });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   let deleted = 0;
   let fetched;
@@ -426,13 +515,13 @@ async function handlePurge(interaction, guildConfig, isAdmin) {
 }
 
 async function handleMonStats(interaction, guildConfig) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const discordUserId = interaction.user.id;
 
   const { data: participant } = await supabase
     .from('participants')
-    .select('id, discord_display_name, win_count, participation_count')
+    .select('id, discord_display_name')
     .eq('discord_user_id', discordUserId)
     .single();
 
@@ -441,42 +530,57 @@ async function handleMonStats(interaction, guildConfig) {
     return;
   }
 
-  // Points de la saison en cours
   const { data: season } = await supabase
     .from('seasons')
     .select('id, name')
     .eq('is_active', true)
     .single();
 
-  let seasonPoints = 0;
-  if (season) {
-    const { data: ledger } = await supabase
-      .from('points_ledger')
-      .select('points')
-      .eq('participant_id', participant.id)
-      .eq('season_id', season.id);
-    seasonPoints = ledger?.reduce((sum, r) => sum + r.points, 0) ?? 0;
-  }
+  // All valid participations from closed contests
+  const { data: closedContests } = await supabase
+    .from('contests')
+    .select('id, season_id')
+    .eq('status', 'closed');
 
-  // Meilleur score (max votes sur une participation)
-  const { data: best } = await supabase
+  const closedContestIds = (closedContests ?? []).map(c => c.id);
+
+  const { data: allParticipations } = await supabase
     .from('participations')
-    .select('vote_count')
+    .select('final_rank, vote_count, contest_id')
     .eq('participant_id', participant.id)
-    .order('vote_count', { ascending: false })
-    .limit(1)
-    .single();
+    .in('contest_id', closedContestIds.length ? closedContestIds : ['none'])
+    .eq('is_valid', true)
+    .not('final_rank', 'is', null);
+
+  const POINTS_MAP = { 1: 100, 2: 60, 3: 30 };
+  const PARTICIPATION_POINTS = 20;
+
+  let winCount = 0;
+  let participationCount = 0;
+  let seasonPoints = 0;
+  let bestVotes = 0;
+
+  const contestSeasonMap = new Map((closedContests ?? []).map(c => [c.id, c.season_id]));
+
+  for (const p of allParticipations ?? []) {
+    participationCount++;
+    if (p.final_rank === 1) winCount++;
+    if ((p.vote_count ?? 0) > bestVotes) bestVotes = p.vote_count ?? 0;
+    if (season && contestSeasonMap.get(p.contest_id) === season.id) {
+      seasonPoints += PARTICIPATION_POINTS + (POINTS_MAP[p.final_rank] ?? 0);
+    }
+  }
 
   const embed = new EmbedBuilder()
     .setTitle(`📊 Tes stats — ${participant.discord_display_name}`)
     .setColor(0x5865f2)
     .addFields(
-      { name: '🏆 Victoires', value: String(participant.win_count), inline: true },
-      { name: '📸 Participations', value: String(participant.participation_count), inline: true },
+      { name: '🏆 Victoires', value: String(winCount), inline: true },
+      { name: '📸 Participations', value: String(participationCount), inline: true },
       { name: `✨ Points ${season?.name ?? 'saison'}`, value: String(seasonPoints), inline: true },
-      { name: '❤️ Meilleur score', value: best ? `${best.vote_count} votes` : 'N/A', inline: true },
+      { name: '❤️ Meilleur score', value: bestVotes > 0 ? `${bestVotes} votes` : 'N/A', inline: true },
     )
-    .addFields({ name: '📊 Classement complet', value: '[Voir sur trakr.fr](https://trakr.fr)', inline: false })
+    .addFields({ name: '📊 Classement complet', value: '[Voir sur traaake.fr](https://traaake.fr/)', inline: false })
     .setFooter({ text: 'Statistiques mises à jour en temps réel' })
     .setTimestamp();
 
@@ -485,16 +589,16 @@ async function handleMonStats(interaction, guildConfig) {
 
 async function handlePoints(interaction, guildConfig, isAdmin) {
   if (!isAdmin) {
-    await interaction.reply({ content: 'Commande réservée aux admins.', ephemeral: true });
+    await interaction.reply({ content: 'Commande réservée aux admins.', flags: MessageFlags.Ephemeral });
     return;
   }
 
-  const sub = interaction.options.getSubcommand();
+  const sub = interaction.options.getSubcommand(false);
   const target = interaction.options.getUser('membre');
   const amount = interaction.options.getInteger('points');
   const reason = (interaction.options.getString('raison') ?? '').slice(0, 256) || null;
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   // Get or create participant
   const { data: participant } = await supabase

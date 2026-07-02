@@ -1,10 +1,19 @@
 import { supabase } from './supabase.js';
 import { log } from './logger.js';
+import { checkAiGenerated, sendAiAlert, ALERT_THRESHOLD } from './ai-check.js';
 
 const VOTE_EMOJI = '❤️';
 
+function getImageAttachments(message) {
+  return message.attachments.filter(a => a.contentType?.startsWith('image/'));
+}
+
+function hasNonImageAttachment(message) {
+  return message.attachments.some(a => !a.contentType?.startsWith('image/'));
+}
+
 function hasImage(message) {
-  if (message.attachments.some(a => a.contentType?.startsWith('image/'))) return true;
+  if (getImageAttachments(message).size > 0) return true;
   if (message.embeds.some(e => e.image || e.thumbnail)) return true;
   return false;
 }
@@ -14,7 +23,7 @@ function hasTextContent(message) {
 }
 
 function getImageUrl(message) {
-  const attachment = message.attachments.find(a => a.contentType?.startsWith('image/'));
+  const attachment = getImageAttachments(message).first();
   if (attachment) return attachment.url;
   const embed = message.embeds.find(e => e.image || e.thumbnail);
   return embed?.image?.url ?? embed?.thumbnail?.url ?? null;
@@ -29,23 +38,63 @@ async function sendDM(user, text) {
   }
 }
 
-export async function handleScreenshotMessage(message, guildConfig, contest) {
+export async function handleScreenshotMessage(message, guildConfig, contest, contestSettings, client) {
+  console.log(`[MSG] Message reçu dans salon concours — ${message.author.username} (${message.author.id})`);
+
+  const allowText   = contestSettings?.allow_text   ?? false;
+  const allowVideos = contestSettings?.allow_videos  ?? false;
+  const deleteInvalid = contestSettings?.delete_invalid_messages ?? true;
+
   const hasImg = hasImage(message);
   const hasText = hasTextContent(message);
+  const imageAttachments = getImageAttachments(message);
+  const hasNonImage = hasNonImageAttachment(message);
 
-  // Delete message and DM user if it's text-only or text+image
-  if (!hasImg) {
-    await message.delete().catch(() => null);
+  // Fichier non-image non-vidéo (PDF, etc.) — toujours rejeté
+  const hasVideo = message.attachments.some(a => a.contentType?.startsWith('video/'));
+  if (hasNonImage && !(allowVideos && hasVideo)) {
+    console.log(`[MSG] Rejeté — fichier non-image (${message.author.username})`);
+    if (deleteInvalid) await message.delete().catch(() => null);
     await sendDM(message.author,
-      `❌ **Salon concours** : seules les images sont autorisées dans ce salon. Pas de texte sans image.`
+      `❌ **Salon concours** : seules les images sont autorisées. Les autres types de fichiers ne sont pas acceptés.`
     );
     return false;
   }
 
-  if (hasText) {
-    await message.delete().catch(() => null);
+  // Plusieurs images dans un seul message
+  if (imageAttachments.size > 1) {
+    console.log(`[MSG] Rejeté — plusieurs images (${message.author.username})`);
+    if (deleteInvalid) await message.delete().catch(() => null);
+    await sendDM(message.author,
+      `❌ **Salon concours** : une seule image par message. Reposte uniquement ta meilleure photo.`
+    );
+    return false;
+  }
+
+  // Pas d'image du tout (ni vidéo si autorisée)
+  if (!hasImg && !(allowVideos && hasVideo)) {
+    console.log(`[MSG] Rejeté — aucune image (${message.author.username})`);
+    if (deleteInvalid) await message.delete().catch(() => null);
+    await sendDM(message.author,
+      `❌ **Salon concours** : seules les images sont autorisées dans ce salon.`
+    );
+    return false;
+  }
+
+  if (!allowText && hasText) {
+    console.log(`[MSG] Rejeté — texte avec image (${message.author.username})`);
+    if (deleteInvalid) await message.delete().catch(() => null);
     await sendDM(message.author,
       `❌ **Salon concours** : tu ne peux pas joindre du texte avec ton image. Reposte uniquement l'image, sans texte.`
+    );
+    return false;
+  }
+
+  // Tiebreak en cours — plus de nouvelles participations
+  if (contest.status === 'tiebreak') {
+    await message.delete().catch(() => null);
+    await sendDM(message.author,
+      `⚖️ **Le concours est en période de départage** — les nouvelles participations ne sont plus acceptées. Le gagnant sera annoncé très prochainement !`
     );
     return false;
   }
@@ -134,17 +183,22 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
   // Add ❤️ reaction as the vote emoji
   await message.react(VOTE_EMOJI);
 
-  // Every 2 participations, send a short promo message pointing to the leaderboard
-  const { count } = await supabase
-    .from('participations')
-    .select('id', { count: 'exact', head: true })
-    .eq('contest_id', contest.id);
+  // Send promo once after the 3rd participation
+  if (!contest.promo_after_3_sent) {
+    const { count } = await supabase
+      .from('participations')
+      .select('id', { count: 'exact', head: true })
+      .eq('contest_id', contest.id);
 
-  if (count && count % 5 === 0) {
-    await message.channel.send(
-      `🏆 **${count} participants** cette semaine ! Retrouve le classement de la saison sur **[trakr.fr](https://trakr.fr)** 📊`
-    );
+    if (count >= 3) {
+      await message.channel.send(
+        `🏆 Le classement de la saison est disponible sur **[traaake.fr](https://traaake.fr/)** — viens voir où tu en es ! 📊`
+      );
+      await supabase.from('contests').update({ promo_after_3_sent: true }).eq('id', contest.id);
+    }
   }
+
+  console.log(`[MSG] Participation acceptée — ${message.author.username} (${discordUserId})`);
 
   await log(guildId, 'participation_submitted', {
     discordUserId,
@@ -152,6 +206,23 @@ export async function handleScreenshotMessage(message, guildConfig, contest) {
     contestId: contest.id,
     imageUrl,
   });
+
+  // AI detection — fire and forget, no automatic sanction
+  if (imageUrl && client) {
+    checkAiGenerated(imageUrl, guildId, log).then(async score => {
+      if (score === null) return;
+      console.log(`[AI] ${message.author.username} — score IA: ${Math.round(score * 100)}%`);
+      if (score >= ALERT_THRESHOLD) {
+        const { data: participant } = await supabase
+          .from('participants')
+          .select('discord_user_id, discord_username')
+          .eq('discord_user_id', discordUserId)
+          .single();
+        if (participant) await sendAiAlert(client, guildConfig, message, participant, score);
+        await log(guildId, 'ai_alert_sent', { discordUserId, score: Math.round(score * 100) });
+      }
+    }).catch(() => null);
+  }
 
   return true;
 }

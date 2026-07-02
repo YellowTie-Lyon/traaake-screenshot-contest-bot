@@ -1,12 +1,14 @@
-import { REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { log } from '../logger.js';
 
 export const commands = [
   new SlashCommandBuilder()
     .setName('contest')
     .setDescription('Gérer le concours screenshot')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addSubcommand(sub =>
       sub.setName('open').setDescription('Ouvrir un nouveau concours')
+        .addStringOption(opt => opt.setName('thème').setDescription('Thème facultatif du concours (ex: coucher de soleil)').setRequired(false))
     )
     .addSubcommand(sub =>
       sub.setName('close').setDescription('Fermer le concours actuel et annoncer les gagnants')
@@ -15,14 +17,21 @@ export const commands = [
       sub.setName('status').setDescription('Voir le statut du concours actuel')
     )
     .addSubcommand(sub =>
-      sub.setName('check').setDescription('Forcer la vérification des votes maintenant (admin)')
-    )
-    .addSubcommand(sub =>
       sub.setName('ban')
         .setDescription('Exclure un membre du concours (admin)')
         .addUserOption(opt => opt.setName('membre').setDescription('Membre à exclure').setRequired(true))
         .addStringOption(opt => opt.setName('raison').setDescription('Raison du ban').setRequired(false))
-        .addStringOption(opt => opt.setName('durée').setDescription('Durée ex: 7j, 30j — vide = permanent').setRequired(false))
+        .addStringOption(opt => opt.setName('durée').setDescription('Durée du ban (vide = permanent)').setRequired(false)
+          .addChoices(
+            { name: '1 minute (test)', value: '1m' },
+            { name: '1 jour', value: '1j' },
+            { name: '3 jours', value: '3j' },
+            { name: '7 jours', value: '7j' },
+            { name: '14 jours', value: '14j' },
+            { name: '30 jours', value: '30j' },
+            { name: 'Permanent', value: 'permanent' },
+          )
+        )
     )
     .addSubcommand(sub =>
       sub.setName('unban')
@@ -35,32 +44,23 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName('classement')
-    .setDescription('Afficher le classement de l\'année en cours'),
+    .setDescription('Afficher le classement de l\'année en cours')
+    .setDefaultMemberPermissions(null),
 
   new SlashCommandBuilder()
     .setName('syncconfig')
-    .setDescription('Recharger la configuration depuis Supabase'),
-
-  new SlashCommandBuilder()
-    .setName('reset')
-    .setDescription('Remettre le classement à zéro (admin uniquement)')
-    .addStringOption(opt =>
-      opt.setName('confirmation')
-        .setDescription('Tapez "CONFIRMER" pour valider le reset')
-        .setRequired(true)
-    ),
-
-  new SlashCommandBuilder()
-    .setName('purge')
-    .setDescription('[TEMP] Supprimer tous les messages du salon concours (admin uniquement)'),
+    .setDescription('Recharger la configuration depuis Supabase')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
   new SlashCommandBuilder()
     .setName('monstats')
-    .setDescription('Voir tes statistiques de participation au concours screenshot'),
+    .setDescription('Voir tes statistiques de participation au concours screenshot')
+    .setDefaultMemberPermissions(null),
 
   new SlashCommandBuilder()
     .setName('points')
     .setDescription('Gérer les points d\'un membre (admin)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addSubcommand(sub =>
       sub.setName('ajouter')
         .setDescription('Ajouter des points à un membre')

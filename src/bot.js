@@ -5,12 +5,12 @@ import {
   Events,
 } from 'discord.js';
 import { supabase } from './supabase.js';
-import { log } from './logger.js';
+import { log, setLogClient } from './logger.js';
 import { loadAllGuildConfigs, getGuildConfig, getActiveContest, refreshGuildConfig } from './config.js';
 import { handleScreenshotMessage, handleVoteReaction } from './participation.js';
 import { handleInteraction } from './commands/handlers.js';
 import { commands, registerCommands } from './commands/index.js';
-import { startScheduler, stopScheduler } from './scheduler.js';
+import { startScheduler, stopScheduler, checkPendingReopen } from './scheduler.js';
 import { resyncVotes } from './votes-resync.js';
 
 function createClient() {
@@ -53,11 +53,16 @@ export async function connectBot(env) {
         .eq('guild_id', guild.id);
     }
 
+    setLogClient(client);
     await resyncVotes(client);
     startScheduler(client);
+    await checkPendingReopen(client);
     watchContestChanges(client, env);
 
     await log(null, 'bot_connected', { environment: env.name, guilds: client.guilds.cache.size });
+    for (const guild of client.guilds.cache.values()) {
+      await log(guild.id, 'bot_started', { environment: env.name, tag: client.user.tag });
+    }
   });
 
   client.on(Events.GuildCreate, async guild => {
@@ -96,7 +101,7 @@ export async function connectBot(env) {
       }
       return;
     }
-    await handleScreenshotMessage(message, config.guildConfig, contest);
+    await handleScreenshotMessage(message, config.guildConfig, contest, config.contestSettings, client);
   });
 
   client.on(Events.MessageReactionAdd, async (reaction, user) => {
@@ -242,14 +247,7 @@ function watchContestChanges(client, env) {
           await log(guildConfig.guild_id, 'contest_suspended_dashboard', { contestId: contest.id });
 
         } else if (contest.status === 'closed') {
-          // Closed from dashboard — trigger full close logic
-          const { openContest, closeContest } = await import('./contest.js');
-          const { data: contestSettings } = await supabase
-            .from('contest_settings')
-            .select('*')
-            .eq('environment_id', env.id)
-            .single();
-
+          const { closeContest } = await import('./contest.js');
           await closeContest(guild, guildConfig, contest, client);
         }
       }
@@ -269,6 +267,9 @@ export async function disconnectBot(client, envName) {
       .eq('guild_id', guild.id);
   }
 
+  for (const guild of client.guilds.cache.values()) {
+    await log(guild.id, 'bot_stopped', { environment: envName });
+  }
   await log(null, 'bot_disconnected', { environment: envName });
   await client.destroy();
   console.log(`[BOT] Disconnected from Discord (env: ${envName})`);

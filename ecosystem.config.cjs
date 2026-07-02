@@ -3,7 +3,7 @@ require('dotenv/config');
 module.exports = {
   apps: [
     {
-      name: 'trakr-prod',
+      name: 'trakebot-prod',
       script: 'src/index.js',
       node_args: '--experimental-vm-modules',
       interpreter: 'node',

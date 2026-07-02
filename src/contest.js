@@ -2,20 +2,65 @@ import { supabase } from './supabase.js';
 import { log } from './logger.js';
 import { EmbedBuilder } from 'discord.js';
 
-const POINTS_MAP = { 1: 100, 2: 60, 3: 30 };
-const PARTICIPATION_POINTS = 20;
-const VOTE_EMOJI = '❤️';
-
-function nextWednesdayAt18() {
-  const now = new Date();
-  const result = new Date(now);
-  const daysUntilWed = (3 - now.getDay() + 7) % 7 || 7; // at least 1 day ahead
-  result.setDate(now.getDate() + daysUntilWed);
-  result.setHours(18, 0, 0, 0);
-  return result;
+function formatDuration(hours) {
+  const totalSeconds = Math.round(hours * 3600);
+  if (totalSeconds < 60) return `${totalSeconds} secondes`;
+  const mins = Math.round(hours * 60);
+  if (mins < 60) return `${mins} minute${mins > 1 ? 's' : ''}`;
+  return `${hours}h`;
 }
 
-export async function openContest(guild, guildConfig, contestSettings, client) {
+const VOTE_EMOJI = '❤️';
+
+async function uploadWinnerImage(imageUrl, participationId) {
+  try {
+    const res = await fetch(imageUrl);
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') ?? 'image/png';
+    const ext = contentType.includes('jpeg') ? 'jpg' : contentType.includes('webp') ? 'webp' : 'png';
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const path = `${participationId}.${ext}`;
+    const { error } = await supabase.storage.from('winners').upload(path, buffer, {
+      contentType,
+      upsert: true,
+    });
+    if (error) return null;
+    const { data } = supabase.storage.from('winners').getPublicUrl(path);
+    return data.publicUrl;
+  } catch {
+    return null;
+  }
+}
+
+function getPointsMap(contestSettings) {
+  return {
+    1: contestSettings?.points_1st ?? 100,
+    2: contestSettings?.points_2nd ?? 60,
+    3: contestSettings?.points_3rd ?? 30,
+  };
+}
+
+function getParticipationPoints(contestSettings) {
+  return contestSettings?.participation_points ?? 20;
+}
+
+function nextWednesdayAt1758() {
+  const now = new Date();
+  const daysUntilWed = (3 - now.getDay() + 7) % 7 || 7;
+  const nextWed = new Date(now);
+  nextWed.setDate(now.getDate() + daysUntilWed);
+
+  // Get the date string in Paris timezone (YYYY-MM-DD)
+  const parisDateStr = nextWed.toLocaleDateString('sv', { timeZone: 'Europe/Paris' });
+
+  // Build a naive UTC date at 17:58Z, then adjust by the actual Paris offset
+  const naiveUTC = new Date(`${parisDateStr}T17:58:00Z`);
+  const parisHour = +naiveUTC.toLocaleString('en', { timeZone: 'Europe/Paris', hour: 'numeric', hour12: false });
+  const offsetMs = (parisHour - 17) * 3600 * 1000;
+  return new Date(naiveUTC.getTime() - offsetMs);
+}
+
+export async function openContest(guild, guildConfig, contestSettings, client, theme = null) {
   const environmentId = guildConfig.environment_id;
 
   let season = await getActiveSeason();
@@ -24,7 +69,9 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
   }
 
   const startDate = new Date();
-  const endDate = nextWednesdayAt18();
+  const endDate = contestSettings?.contest_duration_minutes
+    ? new Date(Date.now() + contestSettings.contest_duration_minutes * 60000)
+    : nextWednesdayAt1758();
 
   const { data: contest, error } = await supabase
     .from('contests')
@@ -33,8 +80,10 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
       season_id: season.id,
       status: 'active',
       title: contestSettings?.contest_title ?? 'Concours Screenshot',
+      theme: theme,
       started_at: startDate.toISOString(),
       ends_at: endDate.toISOString(),
+      original_ends_at: endDate.toISOString(),
     })
     .select()
     .single();
@@ -46,11 +95,31 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
 
   const channel = guild.channels.cache.get(guildConfig.contest_channel_id);
   if (channel) {
+    // Delete the "salon temporairement fermé" message from the previous contest if any
+    const { data: prevContest } = await supabase
+      .from('contests')
+      .select('reopen_message_id')
+      .eq('environment_id', environmentId)
+      .eq('status', 'closed')
+      .not('reopen_message_id', 'is', null)
+      .order('closed_at', { ascending: false })
+      .limit(1)
+      .single();
+    if (prevContest?.reopen_message_id) {
+      await channel.messages.delete(prevContest.reopen_message_id).catch(() => null);
+    }
+
     const startLabel = startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const endLabel   = endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const closeTimestamp = Math.floor(endDate.getTime() / 1000);
 
+    console.log(`[BOT] Message envoyé — ouverture du concours`);
     const openMsg = await channel.send({ content: `@everyone ✈️ Le concours screenshot de la semaine est **ouvert** ! À vos plus beaux clichés !`, allowedMentions: { parse: ['everyone'] } });
+
+    const pts1st = contestSettings?.points_1st ?? 100;
+    const pts2nd = contestSettings?.points_2nd ?? 60;
+    const pts3rd = contestSettings?.points_3rd ?? 30;
+    const ptsParticipation = getParticipationPoints(contestSettings);
 
     const embedAnnonce = new EmbedBuilder()
       .setTitle('📸 Concours Screenshot — Communauté TraaaKe')
@@ -60,12 +129,18 @@ export async function openContest(guild, guildConfig, contestSettings, client) {
       )
       .setColor(0x5865f2)
       .addFields(
+        ...(theme ? [{ name: '🎨 Thème', value: theme, inline: false }] : []),
         { name: '📅 Ouverture', value: startLabel, inline: true },
         { name: '🏁 Fermeture', value: endLabel, inline: true },
         { name: '⏳ Temps restant', value: `<t:${closeTimestamp}:R>`, inline: true },
-        { name: '🏆 Classement', value: '[Voir le classement sur trakr.fr](https://trakr.fr)', inline: false },
+        {
+          name: '🏆 Système de points',
+          value: `🥇 1ère place · **+${pts1st} pts**\n🥈 2ème place · **+${pts2nd} pts**\n🥉 3ème place · **+${pts3rd} pts**\n📸 Participation · **+${ptsParticipation} pts**`,
+          inline: false,
+        },
+        { name: '📊 Classement', value: '[Voir le classement sur traaake.fr](https://traaake.fr/)', inline: false },
       )
-      .setFooter({ text: 'Relancé chaque mercredi à 18h00 • Communauté TraaaKe' });
+      .setFooter({ text: 'Fermeture mercredi à 17h58 • Relance à 18h00 • Communauté TraaaKe' });
 
     const embedRegles = new EmbedBuilder()
       .setTitle('📋 Règles du concours')
@@ -99,6 +174,15 @@ export async function closeContest(guild, guildConfig, contest, client) {
     .from('contests').select('status').eq('id', contest.id).single();
   if (!freshContest || freshContest.status === 'closed') return { tied: false };
 
+  const { data: contestSettings } = await supabase
+    .from('contest_settings')
+    .select('*')
+    .eq('environment_id', guildConfig.environment_id)
+    .single();
+
+  const POINTS_MAP = getPointsMap(contestSettings);
+  const PARTICIPATION_POINTS = getParticipationPoints(contestSettings);
+
   const { data: participations } = await supabase
     .from('participations')
     .select('*, participants(*)')
@@ -114,7 +198,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
         .setTitle('📸 Concours terminé — Aucune participation')
         .setDescription('Personne n\'a participé à ce concours. Rendez-vous mercredi prochain pour le prochain concours !')
         .setColor(0x2b2d31)
-        .setFooter({ text: 'Communauté TraaaKe • trakr.fr' })
+        .setFooter({ text: 'Communauté TraaaKe • traaake.fr' })
         .setTimestamp();
 
       // Edit opening messages in place
@@ -148,7 +232,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
       // Replace top of sorted list with the tiebreak winner (first submitted)
       if (tiedParticipations?.length >= 2) {
         const winner = tiedParticipations[0];
-        const loser = tiedParticipations[1];
+        const others = tiedParticipations.slice(1).map(p => `<@${p.participants.discord_user_id}>`).join(', ');
         // Reorder so winner is first
         const idx = participations.findIndex(p => p.id === winner.id);
         if (idx > 0) {
@@ -160,11 +244,12 @@ export async function closeContest(guild, guildConfig, contest, client) {
           const embed = new EmbedBuilder()
             .setTitle('⚖️ Égalité persistante — départage par ancienneté')
             .setDescription(
-              `<@${winner.participants.discord_user_id}> et <@${loser.participants.discord_user_id}> sont toujours à égalité avec **${winner.vote_count} ❤️**.\n\n` +
+              `<@${winner.participants.discord_user_id}> et ${others} sont toujours à égalité avec **${winner.vote_count} ❤️**.\n\n` +
               `🏆 **<@${winner.participants.discord_user_id}> remporte le concours** car sa photo a été postée en premier !`
             )
             .setColor(0xff9900)
             .setTimestamp();
+          console.log(`[BOT] Message envoyé — tiebreak résolu`);
           await channel.send({ embeds: [embed] });
         }
 
@@ -172,19 +257,31 @@ export async function closeContest(guild, guildConfig, contest, client) {
       }
       // Fall through to normal close logic with reordered participations
     } else {
-      // First tie detected → extend 24h
-      const newEnd = new Date(Date.now() + 24 * 3600000);
+      // First tie detected → extend (configurable via contest_settings, test mode overrides)
+      const tiebreakHours = contestSettings?.tiebreak_duration_hours ?? 1;
+      const tiebreakMs = tiebreakHours * 3600000;
+      const newEnd = new Date(Date.now() + tiebreakMs);
       await supabase.from('contests').update({ ends_at: newEnd.toISOString(), status: 'tiebreak' }).eq('id', contest.id);
 
       if (channel) {
+        // List ALL tied participants (same vote_count as top)
+        const topVotes = participations[0].vote_count;
+        const tiedAll = participations.filter(p => p.vote_count === topVotes);
+        const tiedMentions = tiedAll.map(p => `<@${p.participants.discord_user_id}>`).join(', ');
+
+        const tiebreakLabel = formatDuration(tiebreakHours);
         const embed = new EmbedBuilder()
-          .setTitle('⚖️ Égalité ! Le concours est prolongé.')
+          .setTitle('⚖️ Égalité détectée !')
           .setDescription(
-            `<@${participations[0].participants.discord_user_id}> et <@${participations[1].participants.discord_user_id}> sont à égalité avec **${participations[0].vote_count} ❤️**.\n\n` +
-            `Le concours est prolongé de **24h**. Votez pour départager ! Le concours se termine <t:${Math.floor(newEnd.getTime() / 1000)}:R>.`
+            `${tiedMentions} sont à égalité avec **${topVotes} ❤️**. Le concours est **prolongé de ${tiebreakLabel}** pour départager les concurrents !\n\n` +
+            `🗳️ Continuez à voter pour votre screenshot préféré — chaque vote compte !\n` +
+            `⏳ Nouveau délai de fermeture : <t:${Math.floor(newEnd.getTime() / 1000)}:R>\n` +
+            `🔄 Le vainqueur est vérifié **toutes les 30 secondes** — dès qu'un participant prend l'avantage, le concours se ferme immédiatement !\n\n` +
+            `*En cas d'égalité persistante à la fin du délai, le gagnant sera désigné par ancienneté de publication.*`
           )
           .setColor(0xff9900)
           .setTimestamp();
+        console.log(`[BOT] Message envoyé — tiebreak détecté`);
         const tieMsg = await channel.send({ embeds: [embed] });
         await supabase.from('contests').update({ tiebreak_message_id: tieMsg.id }).eq('id', contest.id);
       }
@@ -205,15 +302,30 @@ export async function closeContest(guild, guildConfig, contest, client) {
   // Award points — participation (everyone) + podium bonus (top 3)
   for (let i = 0; i < participations.length; i++) {
     const participation = participations[i];
-    const podiumBonus = POINTS_MAP[i + 1] ?? 0;
+    const rank = i + 1;
+    const podiumBonus = POINTS_MAP[rank] ?? 0;
     const total = PARTICIPATION_POINTS + podiumBonus;
+
+    // Upload winner image to Supabase Storage for permanent hosting
+    let permanentImageUrl = participation.image_url;
+    if (rank === 1 && participation.image_url) {
+      permanentImageUrl = await uploadWinnerImage(participation.image_url, participation.id) ?? participation.image_url;
+    }
+
+    // Set final_rank and is_winner on participation
+    await supabase.from('participations').update({
+      final_rank: rank,
+      is_winner: rank === 1,
+      is_valid: true,
+      ...(rank === 1 ? { image_url: permanentImageUrl } : {}),
+    }).eq('id', participation.id);
 
     await supabase.from('points_ledger').insert({
       participant_id: participation.participant_id,
       season_id: contest.season_id,
       points: total,
       reason: podiumBonus > 0
-        ? `Concours #${contest.id} — place ${i + 1} (+${podiumBonus} bonus)`
+        ? `Concours #${contest.id} — place ${rank} (+${podiumBonus} bonus)`
         : `Concours #${contest.id} — participation`,
       contest_id: contest.id,
     });
@@ -228,7 +340,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
     if (currentStats) {
       await supabase.from('participants').update({
         participation_count: currentStats.participation_count + 1,
-        ...(i === 0 ? { win_count: currentStats.win_count + 1 } : {}),
+        ...(rank === 1 ? { win_count: currentStats.win_count + 1 } : {}),
       }).eq('id', participation.participant_id);
     }
   }
@@ -240,7 +352,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
   if (channel) {
     const winner = participations[0];
     const startLabel = new Date(contest.started_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-    const endLabel   = new Date(contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const endLabel   = new Date(contest.original_ends_at ?? contest.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
     const pts = (i) => PARTICIPATION_POINTS + (POINTS_MAP[i + 1] ?? 0);
     let podium = `🥇 <@${winner.participants.discord_user_id}> — **${winner.vote_count} ❤️** +${pts(0)} pts`;
@@ -253,7 +365,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
       .setColor(0xffd700)
       .addFields(
         { name: '📅 Semaine du', value: `${startLabel} au ${endLabel}`, inline: true },
-        { name: '🏆 Classement', value: '[Voir sur trakr.fr](https://trakr.fr)', inline: true },
+        { name: '🏆 Classement', value: '[Voir sur traaake.fr](https://traaake.fr/)', inline: true },
       )
       .setFooter({ text: `📸 Photo de ${winner.participants.discord_display_name}` })
       .setTimestamp();
@@ -278,6 +390,8 @@ export async function closeContest(guild, guildConfig, contest, client) {
       if (batch.size < 100) break;
     }
 
+    console.log(`[BOT] Message envoyé — annonce du gagnant (${winner.participants.discord_username})`);
+
     // Transformer l'embed d'annonce/règles en annonce du gagnant (avec mention @everyone)
     if (contest.rules_message_id) {
       const rulesMsg = await channel.messages.fetch(contest.rules_message_id).catch(() => null);
@@ -290,6 +404,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
     }
 
     // DM the winner
+    console.log(`[BOT] DM envoyé au gagnant — ${winner.participants.discord_username}`);
     try {
       const winnerUser = await channel.client.users.fetch(winner.participants.discord_user_id);
       const dm = await winnerUser.createDM();
@@ -297,7 +412,7 @@ export async function closeContest(guild, guildConfig, contest, client) {
         `🏆 **Félicitations ${winner.participants.discord_display_name} !**\n\n` +
         `Tu remportes le concours screenshot de la semaine avec **${winner.vote_count} ❤️** !\n` +
         `Tu reçois le rôle **Photographe de la semaine** et **${PARTICIPATION_POINTS + (POINTS_MAP[1] ?? 0)} points** au classement.\n\n` +
-        `📊 Retrouve le classement complet sur **https://trakr.fr**`
+        `📊 Retrouve le classement complet sur **https://traaake.fr/**`
       );
     } catch { /* DMs may be closed */ }
 
