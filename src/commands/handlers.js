@@ -663,7 +663,19 @@ async function handlePurgeMember(interaction, guildConfig, isAdmin) {
     return;
   }
 
-  // Delete all participations (cascades points_ledger if FK set, else delete manually)
+  // Nullify winner references in contests before deleting participations
+  const { data: winnerParticipations } = await supabase
+    .from('participations')
+    .select('id')
+    .eq('participant_id', participant.id)
+    .eq('is_winner', true);
+
+  for (const wp of winnerParticipations ?? []) {
+    await supabase.from('contests')
+      .update({ winner_participation_id: null, winner_discord_user_id: null })
+      .eq('winner_participation_id', wp.id);
+  }
+
   await supabase.from('points_ledger').delete().eq('participant_id', participant.id);
   await supabase.from('participations').delete().eq('participant_id', participant.id);
   await supabase.from('contest_bans').delete().eq('discord_user_id', target.id);
