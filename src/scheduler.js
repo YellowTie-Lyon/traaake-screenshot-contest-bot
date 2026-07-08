@@ -15,8 +15,8 @@ export function startScheduler(client) {
   tasks.push(setInterval(() => checkTiebreak(client), 30000));
   // Monday 18h00 Paris: vote reminder @everyone
   tasks.push(cron.schedule('0 18 * * 1', () => sendVoteReminder(client), tz));
-  // Wednesday 17h48 Paris: 10min warning before close
-  tasks.push(cron.schedule('48 17 * * 3', () => sendContestWarning(client), tz));
+  // Wednesday 17h45 Paris: 10min warning before close
+  tasks.push(cron.schedule('45 17 * * 3', () => sendContestWarning(client), tz));
   // Daily 18h Paris except Monday (vote reminder) and Wednesday (close day): promo classement
   tasks.push(cron.schedule('0 18 * * 0,2,4,5,6', () => sendDailyPromo(client), tz));
 

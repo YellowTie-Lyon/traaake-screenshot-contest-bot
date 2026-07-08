@@ -44,7 +44,7 @@ function getParticipationPoints(contestSettings) {
   return contestSettings?.participation_points ?? 20;
 }
 
-function nextWednesdayAt1758() {
+function nextWednesdayAt1755() {
   const now = new Date();
   const daysUntilWed = (3 - now.getDay() + 7) % 7 || 7;
   const nextWed = new Date(now);
@@ -53,8 +53,8 @@ function nextWednesdayAt1758() {
   // Get the date string in Paris timezone (YYYY-MM-DD)
   const parisDateStr = nextWed.toLocaleDateString('sv', { timeZone: 'Europe/Paris' });
 
-  // Build a naive UTC date at 17:58Z, then adjust by the actual Paris offset
-  const naiveUTC = new Date(`${parisDateStr}T17:58:00Z`);
+  // Build a naive UTC date at 17:55 Paris time
+  const naiveUTC = new Date(`${parisDateStr}T17:55:00Z`);
   const parisHour = +naiveUTC.toLocaleString('en', { timeZone: 'Europe/Paris', hour: 'numeric', hour12: false });
   const offsetMs = (parisHour - 17) * 3600 * 1000;
   return new Date(naiveUTC.getTime() - offsetMs);
@@ -71,7 +71,7 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
   const startDate = new Date();
   const endDate = contestSettings?.contest_duration_minutes
     ? new Date(Date.now() + contestSettings.contest_duration_minutes * 60000)
-    : nextWednesdayAt1758();
+    : nextWednesdayAt1755();
 
   const { data: contest, error } = await supabase
     .from('contests')
@@ -308,8 +308,18 @@ export async function closeContest(guild, guildConfig, contest, client) {
 
     // Upload winner image to Supabase Storage for permanent hosting
     let permanentImageUrl = participation.image_url;
-    if (rank === 1 && participation.image_url) {
-      permanentImageUrl = await uploadWinnerImage(participation.image_url, participation.id) ?? participation.image_url;
+    if (rank === 1) {
+      // Try to get a fresh attachment URL from the Discord message (CDN URLs can expire)
+      let sourceUrl = participation.image_url;
+      if (participation.message_id && channel) {
+        const msg = await channel.messages.fetch(participation.message_id).catch(() => null);
+        if (msg?.attachments?.size > 0) {
+          sourceUrl = msg.attachments.first().url;
+        }
+      }
+      if (sourceUrl) {
+        permanentImageUrl = await uploadWinnerImage(sourceUrl, participation.id) ?? participation.image_url;
+      }
     }
 
     // Set final_rank and is_winner on participation
