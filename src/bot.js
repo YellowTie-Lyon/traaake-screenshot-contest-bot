@@ -180,10 +180,15 @@ export async function connectBot(env) {
     if (!config) return;
     if (message.channelId !== config.guildConfig.contest_channel_id) return;
 
+    // Only delete participation if contest is still active
+    const activeContest = await getActiveContest(config.guildConfig.environment_id);
+    if (!activeContest) return;
+
     const { data: participation } = await supabase
       .from('participations')
       .select('id, participant_id, participants(discord_user_id, discord_username)')
       .eq('message_id', message.id)
+      .eq('contest_id', activeContest.id)
       .single();
 
     if (!participation) return;
