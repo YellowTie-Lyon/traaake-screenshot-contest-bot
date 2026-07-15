@@ -149,6 +149,7 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
         `✅ **Une seule photo** par concours — supprime l'ancienne pour en changer\n` +
         `✅ Le screenshot doit **t'appartenir**\n` +
         `❌ Les **streamers / youtubers** ne peuvent pas participer\n` +
+        `❌ Les images **générées, modifiées ou altérées par intelligence artificielle** sont strictement interdites\n` +
         `❌ Screenshots **troll, offensants ou inappropriés** supprimés par la modération\n` +
         `❌ **Pas de texte** avec l'image — poste uniquement la photo`
       )
