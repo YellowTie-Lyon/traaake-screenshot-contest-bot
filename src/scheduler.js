@@ -147,7 +147,7 @@ async function sendVoteReminder(client) {
   }
 }
 
-// Mercredi 17h48 — warning 10 min avant fermeture
+// Mercredi 17h45 — warning 10 min avant fermeture
 async function sendContestWarning(client) {
   for (const guild of client.guilds.cache.values()) {
     try {

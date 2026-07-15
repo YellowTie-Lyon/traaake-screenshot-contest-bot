@@ -140,7 +140,7 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
         },
         { name: '📊 Classement', value: '[Voir le classement sur traaake.fr](https://traaake.fr/)', inline: false },
       )
-      .setFooter({ text: 'Fermeture mercredi à 17h58 • Relance à 18h00 • Communauté TraaaKe' });
+      .setFooter({ text: 'Fermeture mercredi à 17h55 • Relance à 18h00 • Communauté TraaaKe' });
 
     const embedRegles = new EmbedBuilder()
       .setTitle('📋 Règles du concours')
