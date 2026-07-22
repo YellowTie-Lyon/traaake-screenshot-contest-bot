@@ -320,13 +320,21 @@ export async function closeContest(guild, guildConfig, contest, client) {
     // Upload winner image to Supabase Storage for permanent hosting
     let permanentImageUrl = participation.image_url;
     if (rank === 1) {
-      // Try to get a fresh attachment URL from the Discord message (CDN URLs can expire)
+      console.log(`[UPLOAD] Traitement image gagnant — message_id: ${participation.message_id}, channel: ${!!channel}`);
       let sourceUrl = participation.image_url;
       if (participation.message_id && channel) {
-        const msg = await channel.messages.fetch(participation.message_id).catch(() => null);
+        const msg = await channel.messages.fetch(participation.message_id).catch(err => {
+          console.error(`[UPLOAD] Impossible de récupérer le message Discord (${participation.message_id}):`, err.message);
+          return null;
+        });
         if (msg?.attachments?.size > 0) {
           sourceUrl = msg.attachments.first().url;
+          console.log(`[UPLOAD] URL fraîche récupérée depuis Discord`);
+        } else {
+          console.warn(`[UPLOAD] Message Discord sans attachement ou introuvable — fallback sur image_url en DB`);
         }
+      } else {
+        console.warn(`[UPLOAD] Pas de message_id ou channel indisponible — fallback sur image_url en DB`);
       }
       if (sourceUrl) {
         permanentImageUrl = await uploadWinnerImage(sourceUrl, participation.id) ?? participation.image_url;
