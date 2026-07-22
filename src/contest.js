@@ -14,20 +14,30 @@ const VOTE_EMOJI = '❤️';
 
 async function uploadWinnerImage(imageUrl, participationId) {
   try {
+    console.log(`[UPLOAD] Téléchargement image gagnant: ${imageUrl}`);
     const res = await fetch(imageUrl);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`[UPLOAD] Échec fetch image (${res.status}): ${imageUrl}`);
+      return null;
+    }
     const contentType = res.headers.get('content-type') ?? 'image/png';
     const ext = contentType.includes('jpeg') ? 'jpg' : contentType.includes('webp') ? 'webp' : 'png';
     const buffer = Buffer.from(await res.arrayBuffer());
     const path = `${participationId}.${ext}`;
+    console.log(`[UPLOAD] Upload vers Supabase Storage: winners/${path}`);
     const { error } = await supabase.storage.from('winners').upload(path, buffer, {
       contentType,
       upsert: true,
     });
-    if (error) return null;
+    if (error) {
+      console.error(`[UPLOAD] Échec upload Supabase Storage:`, error.message);
+      return null;
+    }
     const { data } = supabase.storage.from('winners').getPublicUrl(path);
+    console.log(`[UPLOAD] Image uploadée avec succès: ${data.publicUrl}`);
     return data.publicUrl;
-  } catch {
+  } catch (err) {
+    console.error(`[UPLOAD] Erreur inattendue:`, err.message);
     return null;
   }
 }
