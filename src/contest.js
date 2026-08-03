@@ -328,8 +328,8 @@ export async function closeContest(guild, guildConfig, contest, client) {
           return null;
         });
         if (msg?.attachments?.size > 0) {
-          sourceUrl = msg.attachments.first().url;
-          console.log(`[UPLOAD] URL fraîche récupérée depuis Discord`);
+          sourceUrl = msg.attachments.first().proxyURL;
+          console.log(`[UPLOAD] URL fraîche récupérée depuis Discord (proxyURL)`);
         } else {
           console.warn(`[UPLOAD] Message Discord sans attachement ou introuvable — fallback sur image_url en DB`);
         }
