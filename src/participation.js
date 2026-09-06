@@ -29,6 +29,38 @@ function getImageUrl(message) {
   return embed?.image?.url ?? embed?.thumbnail?.url ?? null;
 }
 
+export async function uploadToStorage(imageUrl, participationId) {
+  try {
+    const res = await fetch(imageUrl);
+    if (!res.ok) {
+      console.error(`[STORAGE] Échec fetch image (${res.status}): ${imageUrl}`);
+      return null;
+    }
+    const contentType = res.headers.get('content-type') ?? 'image/png';
+    const ext = contentType.includes('jpeg') ? 'jpg' : contentType.includes('webp') ? 'webp' : 'png';
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const path = `${participationId}.${ext}`;
+    const { error } = await supabase.storage.from('winners').upload(path, buffer, { contentType, upsert: true });
+    if (error) {
+      console.error(`[STORAGE] Échec upload:`, error.message);
+      return null;
+    }
+    const { data } = supabase.storage.from('winners').getPublicUrl(path);
+    console.log(`[STORAGE] Image uploadée: ${data.publicUrl}`);
+    return data.publicUrl;
+  } catch (err) {
+    console.error(`[STORAGE] Erreur inattendue:`, err.message);
+    return null;
+  }
+}
+
+export async function deleteFromStorage(participationId) {
+  const exts = ['png', 'jpg', 'webp'];
+  for (const ext of exts) {
+    await supabase.storage.from('winners').remove([`${participationId}.${ext}`]).catch(() => null);
+  }
+}
+
 async function sendDM(user, text) {
   try {
     const dm = await user.createDM();
@@ -166,18 +198,30 @@ export async function handleScreenshotMessage(message, guildConfig, contest, con
 
   const imageUrl = getImageUrl(message);
 
-  const { error: subErr } = await supabase.from('participations').insert({
+  const { data: inserted, error: subErr } = await supabase.from('participations').insert({
     participant_id: participant.id,
     contest_id: contest.id,
     image_url: imageUrl,
     message_id: message.id,
     vote_count: 0,
     submitted_at: new Date().toISOString(),
-  });
+  }).select('id').single();
 
   if (subErr) {
     await log(guildId, 'participation_insert_failed', { error: subErr.message }, 'error');
     return false;
+  }
+
+  // Upload image immediately — Discord CDN URLs expire before contest close
+  if (imageUrl && inserted?.id) {
+    uploadToStorage(imageUrl, inserted.id).then(async storageUrl => {
+      if (storageUrl) {
+        await supabase.from('participations').update({ image_url: storageUrl }).eq('id', inserted.id);
+        console.log(`[STORAGE] image_url mis à jour pour participation ${inserted.id}`);
+      } else {
+        console.warn(`[STORAGE] Upload échoué pour participation ${inserted.id} — image_url Discord conservé`);
+      }
+    }).catch(err => console.error(`[STORAGE] Erreur upload async:`, err.message));
   }
 
   // Add ❤️ reaction as the vote emoji

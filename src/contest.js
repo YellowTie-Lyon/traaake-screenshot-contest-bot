@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 import { log } from './logger.js';
 import { EmbedBuilder } from 'discord.js';
+import { deleteFromStorage } from './participation.js';
 
 function formatDuration(hours) {
   const totalSeconds = Math.round(hours * 3600);
@@ -317,36 +318,12 @@ export async function closeContest(guild, guildConfig, contest, client) {
     const podiumBonus = POINTS_MAP[rank] ?? 0;
     const total = PARTICIPATION_POINTS + podiumBonus;
 
-    // Upload winner image to Supabase Storage for permanent hosting
-    let permanentImageUrl = participation.image_url;
-    if (rank === 1) {
-      console.log(`[UPLOAD] Traitement image gagnant — message_id: ${participation.message_id}, channel: ${!!channel}`);
-      let sourceUrl = participation.image_url;
-      if (participation.message_id && channel) {
-        const msg = await channel.messages.fetch(participation.message_id).catch(err => {
-          console.error(`[UPLOAD] Impossible de récupérer le message Discord (${participation.message_id}):`, err.message);
-          return null;
-        });
-        if (msg?.attachments?.size > 0) {
-          sourceUrl = msg.attachments.first().proxyURL;
-          console.log(`[UPLOAD] URL fraîche récupérée depuis Discord (proxyURL)`);
-        } else {
-          console.warn(`[UPLOAD] Message Discord sans attachement ou introuvable — fallback sur image_url en DB`);
-        }
-      } else {
-        console.warn(`[UPLOAD] Pas de message_id ou channel indisponible — fallback sur image_url en DB`);
-      }
-      if (sourceUrl) {
-        permanentImageUrl = await uploadWinnerImage(sourceUrl, participation.id) ?? participation.image_url;
-      }
-    }
-
     // Set final_rank and is_winner on participation
+    // image_url is already a Supabase Storage URL (uploaded at submission time)
     await supabase.from('participations').update({
       final_rank: rank,
       is_winner: rank === 1,
       is_valid: true,
-      ...(rank === 1 ? { image_url: permanentImageUrl } : {}),
     }).eq('id', participation.id);
 
     await supabase.from('points_ledger').insert({
@@ -445,11 +422,17 @@ export async function closeContest(guild, guildConfig, contest, client) {
       );
     } catch { /* DMs may be closed */ }
 
-    // Delete non-winner participation photos (winner's photo stays below)
+    // Delete non-winner participation photos from Discord channel
     for (const p of participations.slice(1)) {
       if (p.message_id) await channel.messages.delete(p.message_id).catch(() => null);
     }
   }
+
+  // Delete non-winner images from Supabase Storage (keep only winner image)
+  for (const p of participations.slice(1)) {
+    await deleteFromStorage(p.id);
+  }
+  console.log(`[STORAGE] ${participations.length - 1} images non-gagnantes supprimées`);
 
   await log(guild.id, 'contest_closed', {
     contestId: contest.id,

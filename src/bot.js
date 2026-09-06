@@ -7,7 +7,7 @@ import {
 import { supabase } from './supabase.js';
 import { log, setLogClient } from './logger.js';
 import { loadAllGuildConfigs, getGuildConfig, getActiveContest, refreshGuildConfig } from './config.js';
-import { handleScreenshotMessage, handleVoteReaction } from './participation.js';
+import { handleScreenshotMessage, handleVoteReaction, deleteFromStorage } from './participation.js';
 import { handleInteraction } from './commands/handlers.js';
 import { commands, registerCommands } from './commands/index.js';
 import { startScheduler, stopScheduler, checkPendingReopen } from './scheduler.js';
@@ -194,6 +194,7 @@ export async function connectBot(env) {
     if (!participation) return;
 
     await supabase.from('participations').delete().eq('id', participation.id);
+    await deleteFromStorage(participation.id);
     await log(message.guildId, 'participation_deleted', {
       messageId: message.id,
       participantId: participation.participant_id,
