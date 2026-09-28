@@ -161,6 +161,7 @@ export async function openContest(guild, guildConfig, contestSettings, client, t
         `✅ Le screenshot doit **t'appartenir**\n` +
         `❌ Les **streamers / youtubers** ne peuvent pas participer\n` +
         `❌ Les images **générées, modifiées ou altérées par intelligence artificielle** sont strictement interdites\n` +
+        `❌ Les screenshots utilisant le **DLSS 5 (ou toute technologie de reconstruction/génération de pixels par IA)** ne sont pas autorisés\n` +
         `❌ Screenshots **troll, offensants ou inappropriés** supprimés par la modération\n` +
         `❌ **Pas de texte** avec l'image — poste uniquement la photo`
       )
